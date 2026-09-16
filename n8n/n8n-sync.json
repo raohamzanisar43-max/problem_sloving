@@ -1,0 +1,94 @@
+{
+  "name": "Novu Opportunity Radar - Excel Cloud Sync Trigger",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger-0900",
+      "name": "Schedule (Daily 09:00 PKT)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {},
+      "id": "manual-trigger-sync",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [200, 480]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://radar.example.invalid/api/v1/sync/jobs/",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"target_id\": \"configured-export-target-id\",\n  \"scope\": \"qualified\"\n}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "id": "http-queue-sync",
+      "name": "Queue Cloud Workbook Sync",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 380],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "novu-radar-service-token",
+          "name": "Novu Radar Header Auth"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule (Daily 09:00 PKT)": {
+      "main": [
+        [
+          {
+            "node": "Queue Cloud Workbook Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Queue Cloud Workbook Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Karachi"
+  },
+  "versionId": "1.0.0",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "description": "Triggers daily automated synchronization of qualified opportunities to approved Microsoft Graph OneDrive / SharePoint Excel workbooks."
+  }
+}

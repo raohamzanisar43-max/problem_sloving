@@ -1,0 +1,941 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Novu Opportunity Radar API",
+    "description": "Internal service boundary and data contracts for Novu Labs AI-assisted sales opportunity discovery and qualification platform.",
+    "version": "1.0.0",
+    "contact": {
+      "name": "Novu Labs Engineering & Sales Intelligence",
+      "email": "engineering@novu.invalid"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8000/api/v1",
+      "description": "Local Development Server"
+    },
+    {
+      "url": "https://radar.novu.invalid/api/v1",
+      "description": "Production Internal API"
+    }
+  ],
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ],
+  "paths": {
+    "/auth/token/": {
+      "post": {
+        "summary": "Obtain JWT token pair",
+        "description": "Exchanges valid user credentials for a short-lived access token (8h) and refresh token (7d).",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenObtainPairRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Authentication successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenObtainPairResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/auth/token/refresh/": {
+      "post": {
+        "summary": "Refresh JWT access token",
+        "description": "Rotates refresh token and returns a new access token.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["refresh"],
+                "properties": {
+                  "refresh": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Token refreshed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenRefreshResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/auth/me/": {
+      "get": {
+        "summary": "Current authenticated user profile",
+        "responses": {
+          "200": {
+            "description": "User details and RBAC role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserProfile"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/runs/": {
+      "get": {
+        "summary": "List collection runs",
+        "description": "Returns collection run executions and counters with optional filtering.",
+        "parameters": [
+          { "name": "source_id", "in": "query", "schema": { "type": "string", "format": "uuid" } },
+          { "name": "state", "in": "query", "schema": { "type": "string", "enum": ["queued", "running", "completed", "partial", "failed"] } },
+          { "name": "trigger", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of collection runs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunListResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Queue a collection run",
+        "description": "Queues collection for a specific source or all enabled sources. Requires sales_manager or admin role.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Collection run queued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunDetail"
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/runs/{id}/": {
+      "get": {
+        "summary": "Get collection run status",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Run execution details, counters, spend and error class",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunDetail"
+                }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/observations/": {
+      "get": {
+        "summary": "List observations",
+        "parameters": [
+          { "name": "source", "in": "query", "schema": { "type": "string", "format": "uuid" } },
+          { "name": "is_manual", "in": "query", "schema": { "type": "boolean" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of normalized observations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservationListResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Ingest manual or connector observation",
+        "description": "Submits an observation with source text and provenance; triggers extraction, scoring, and duplicate check synchronously or queues async.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ObservationCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Observation recorded and processed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservationDetail"
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" }
+        }
+      }
+    },
+    "/opportunities/": {
+      "get": {
+        "summary": "List qualified opportunities (Queue)",
+        "description": "Returns permission-filtered opportunities using cursor pagination.",
+        "parameters": [
+          { "name": "service", "in": "query", "schema": { "type": "string" }, "description": "Filter by primary service category" },
+          { "name": "status", "in": "query", "schema": { "type": "string" }, "description": "Filter by sales status" },
+          { "name": "intent", "in": "query", "schema": { "type": "string", "enum": ["buyer", "nonbuyer", "uncertain"] } },
+          { "name": "band", "in": "query", "schema": { "type": "string", "enum": ["Hot", "High potential", "Review", "Archive"] } },
+          { "name": "owner", "in": "query", "schema": { "type": "integer" } },
+          { "name": "search", "in": "query", "schema": { "type": "string" } },
+          { "name": "cursor", "in": "query", "schema": { "type": "string" } },
+          { "name": "page_size", "in": "query", "schema": { "type": "integer", "default": 25, "maximum": 100 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cursor-paginated opportunity queue",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpportunityCursorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/opportunities/stats/": {
+      "get": {
+        "summary": "Overview KPI metrics",
+        "responses": {
+          "200": {
+            "description": "Counts for collected leads, open buyers, review queue, and verified contacts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OverviewStats"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/opportunities/pipeline/": {
+      "get": {
+        "summary": "Sales pipeline stages breakdown",
+        "description": "Groups reviewed opportunities by stage: reviewed, contacted, meeting, proposal, won.",
+        "responses": {
+          "200": {
+            "description": "Kanban pipeline lane records",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PipelineLanes"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/opportunities/{id}/": {
+      "get": {
+        "summary": "Get opportunity details",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Full opportunity details with score breakdown, evidence, and contact provenance",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpportunityDetail"
+                }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "patch": {
+        "summary": "Update opportunity status, assignment or notes",
+        "description": "Applies changes using optimistic concurrency control (`expected_revision`). Returns 409 or 400 on conflict.",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpportunityUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Opportunity updated and revision incremented",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpportunityDetail"
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "409": { "$ref": "#/components/responses/Conflict" }
+        }
+      },
+      "delete": {
+        "summary": "Delete opportunity",
+        "description": "Admin only endpoint.",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "204": { "description": "Deleted successfully" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/opportunities/{id}/drafts/": {
+      "post": {
+        "summary": "Create sales outreach draft",
+        "description": "Generates a tailored sales outreach draft referencing the requirement and Novu capabilities. Requires reviewed status or above.",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "custom_notes": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Draft created and stored for human review",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftDetail"
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" }
+        }
+      }
+    },
+    "/opportunities/{id}/activities/": {
+      "get": {
+        "summary": "List audit activities for opportunity",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Activity timeline",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/ActivityDetail" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/exports/opportunities.csv": {
+      "get": {
+        "summary": "Export opportunities as CSV",
+        "description": "Generates a UTF-8 CSV snapshot with formula-injection neutralization and exact 30-column specification.",
+        "parameters": [
+          { "name": "service", "in": "query", "schema": { "type": "string" } },
+          { "name": "status", "in": "query", "schema": { "type": "string" } },
+          { "name": "intent", "in": "query", "schema": { "type": "string" } },
+          { "name": "band", "in": "query", "schema": { "type": "string" } },
+          { "name": "search", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Safe CSV file attachment",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/duplicates/": {
+      "get": {
+        "summary": "List duplicate candidates",
+        "parameters": [
+          { "name": "decision", "in": "query", "schema": { "type": "string", "enum": ["pending", "accepted", "rejected"], "default": "pending" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of duplicate candidate pairs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/DuplicateCandidateDetail" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/duplicates/{id}/resolve/": {
+      "post": {
+        "summary": "Resolve duplicate candidate pair",
+        "description": "Accepts (merges) or rejects duplicate candidate pair. Requires sales_manager or admin role.",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["decision"],
+                "properties": {
+                  "decision": { "type": "string", "enum": ["accepted", "rejected"] },
+                  "reason": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Candidate resolved and audited"
+          },
+          "409": { "$ref": "#/components/responses/Conflict" }
+        }
+      }
+    },
+    "/sources/": {
+      "get": {
+        "summary": "List sources and health status",
+        "responses": {
+          "200": {
+            "description": "Source health and readiness status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/SourceDetail" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sources/{id}/": {
+      "patch": {
+        "summary": "Update source settings or enable/disable",
+        "description": "Admin only.",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SourceUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Source updated"
+          },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/search-terms/": {
+      "get": {
+        "summary": "List starter query groups and rules",
+        "responses": {
+          "200": {
+            "description": "Search term groups",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/SearchTermDetail" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sync/jobs/": {
+      "post": {
+        "summary": "Queue cloud workbook sync job",
+        "description": "Dispatches an asynchronous export sync to a configured target (e.g. OneDrive Excel via Microsoft Graph).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["target_id"],
+                "properties": {
+                  "target_id": { "type": "string", "format": "uuid" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Sync job queued"
+          }
+        }
+      }
+    },
+    "/settings/": {
+      "get": {
+        "summary": "Get runtime operating settings",
+        "responses": {
+          "200": {
+            "description": "Current operating settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperatingSettings"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update operating settings",
+        "description": "Admin only.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Settings updated"
+          },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/health/": {
+      "get": {
+        "summary": "System liveness and readiness probe",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "System operational",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "ok" },
+                    "timestamp": { "type": "string", "format": "date-time" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Invalid payload or validation failure",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "Missing or invalid bearer token",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "Insufficient role permissions for requested action",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Resource not found",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+          }
+        }
+      },
+      "Conflict": {
+        "description": "Optimistic revision conflict or duplicate action",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "TokenObtainPairRequest": {
+        "type": "object",
+        "required": ["username", "password"],
+        "properties": {
+          "username": { "type": "string", "example": "executive" },
+          "password": { "type": "string", "format": "password", "example": "exec123" }
+        }
+      },
+      "TokenObtainPairResponse": {
+        "type": "object",
+        "required": ["access", "refresh"],
+        "properties": {
+          "access": { "type": "string" },
+          "refresh": { "type": "string" },
+          "user": { "$ref": "#/components/schemas/UserProfile" }
+        }
+      },
+      "TokenRefreshResponse": {
+        "type": "object",
+        "required": ["access", "refresh"],
+        "properties": {
+          "access": { "type": "string" },
+          "refresh": { "type": "string" }
+        }
+      },
+      "UserProfile": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "username": { "type": "string" },
+          "display_name": { "type": "string" },
+          "email": { "type": "string" },
+          "role": { "type": "string", "enum": ["admin", "sales_manager", "sales_executive"] }
+        }
+      },
+      "OpportunityDetail": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "requirement": { "type": "string" },
+          "text": { "type": "string" },
+          "primary_category": { "type": "string" },
+          "secondary_categories": { "type": "array", "items": { "type": "string" } },
+          "technologies": { "type": "array", "items": { "type": "string" } },
+          "intent": { "type": "string", "enum": ["buyer", "nonbuyer", "uncertain"] },
+          "kind": { "type": "string" },
+          "confidence": { "type": "number" },
+          "score": { "type": "integer" },
+          "band": { "type": "string", "enum": ["Hot", "High potential", "Review", "Archive"] },
+          "status": { "type": "string" },
+          "score_factors": {
+            "type": "array",
+            "items": { "type": "integer" },
+            "description": "[Buying intent (30), Service match (25), Recency (15), Evidence (15), Contact (10), Deadline (5)]"
+          },
+          "owner": { "type": "integer", "nullable": true },
+          "owner_name": { "type": "string", "nullable": true },
+          "detected_at": { "type": "string", "format": "date-time" },
+          "source_published_at": { "type": "string", "format": "date-time", "nullable": true },
+          "deadline": { "type": "string", "format": "date", "nullable": true },
+          "company_name": { "type": "string", "nullable": true },
+          "company_website": { "type": "string", "nullable": true },
+          "country": { "type": "string", "nullable": true },
+          "budget_text": { "type": "string", "nullable": true },
+          "email": { "type": "string", "nullable": true },
+          "phone": { "type": "string", "nullable": true },
+          "contact_verification": { "type": "string", "nullable": true },
+          "source_url": { "type": "string" },
+          "review_reasons": { "type": "array", "items": { "type": "string" } },
+          "intent_evidence": { "type": "string", "nullable": true },
+          "notes": { "type": "string" },
+          "revision": { "type": "integer" }
+        }
+      },
+      "OpportunityUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string" },
+          "owner": { "type": "integer", "nullable": true },
+          "notes": { "type": "string" },
+          "expected_revision": { "type": "integer", "description": "Current known revision for optimistic concurrency" }
+        }
+      },
+      "OpportunityCursorResponse": {
+        "type": "object",
+        "properties": {
+          "count": { "type": "integer" },
+          "next": { "type": "string", "nullable": true },
+          "previous": { "type": "string", "nullable": true },
+          "results": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/OpportunityDetail" }
+          }
+        }
+      },
+      "OverviewStats": {
+        "type": "object",
+        "properties": {
+          "collected_count": { "type": "integer" },
+          "explicit_buyers_count": { "type": "integer" },
+          "awaiting_review_count": { "type": "integer" },
+          "verified_contacts_count": { "type": "integer" }
+        }
+      },
+      "PipelineLanes": {
+        "type": "object",
+        "properties": {
+          "reviewed": { "type": "array", "items": { "$ref": "#/components/schemas/OpportunityDetail" } },
+          "contacted": { "type": "array", "items": { "$ref": "#/components/schemas/OpportunityDetail" } },
+          "meeting": { "type": "array", "items": { "$ref": "#/components/schemas/OpportunityDetail" } },
+          "proposal": { "type": "array", "items": { "$ref": "#/components/schemas/OpportunityDetail" } },
+          "won": { "type": "array", "items": { "$ref": "#/components/schemas/OpportunityDetail" } }
+        }
+      },
+      "ObservationCreateRequest": {
+        "type": "object",
+        "required": ["source_id", "url", "source_text"],
+        "properties": {
+          "source_id": { "type": "string", "format": "uuid" },
+          "url": { "type": "string", "format": "uri" },
+          "source_text": { "type": "string" },
+          "external_id": { "type": "string" },
+          "author": { "type": "string" },
+          "published_at": { "type": "string", "format": "date-time" },
+          "is_manual": { "type": "boolean", "default": true }
+        }
+      },
+      "ObservationDetail": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "source_id": { "type": "string", "format": "uuid" },
+          "canonical_url": { "type": "string" },
+          "content_hash": { "type": "string" },
+          "opportunity_id": { "type": "string", "format": "uuid", "nullable": true },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "RunCreateRequest": {
+        "type": "object",
+        "properties": {
+          "source_id": { "type": "string", "format": "uuid", "nullable": true },
+          "trigger": { "type": "string", "default": "manual" }
+        }
+      },
+      "RunDetail": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "source_name": { "type": "string" },
+          "state": { "type": "string" },
+          "trigger": { "type": "string" },
+          "fetched_count": { "type": "integer" },
+          "new_count": { "type": "integer" },
+          "duplicate_count": { "type": "integer" },
+          "error_count": { "type": "integer" },
+          "qualified_count": { "type": "integer" },
+          "spend_amount": { "type": "number" },
+          "started_at": { "type": "string", "format": "date-time" },
+          "finished_at": { "type": "string", "format": "date-time", "nullable": true }
+        }
+      },
+      "SourceDetail": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "connector_type": { "type": "string" },
+          "enabled": { "type": "boolean" },
+          "access_state": { "type": "string" },
+          "last_success_at": { "type": "string", "format": "date-time", "nullable": true },
+          "last_failure_at": { "type": "string", "format": "date-time", "nullable": true }
+        }
+      },
+      "SourceUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "enabled": { "type": "boolean" },
+          "access_state": { "type": "string" },
+          "settings": { "type": "object" }
+        }
+      },
+      "DraftDetail": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "opportunity_id": { "type": "string", "format": "uuid" },
+          "content": { "type": "string" },
+          "model_version": { "type": "string" },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ActivityDetail": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "actor_name": { "type": "string" },
+          "kind": { "type": "string" },
+          "payload": { "type": "object" },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "DuplicateCandidateDetail": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "source_id": { "type": "string", "format": "uuid" },
+          "source_requirement": { "type": "string" },
+          "source_score": { "type": "integer" },
+          "target_id": { "type": "string", "format": "uuid" },
+          "target_requirement": { "type": "string" },
+          "target_score": { "type": "integer" },
+          "similarity": { "type": "number" },
+          "decision": { "type": "string" }
+        }
+      },
+      "SearchTermDetail": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "query": { "type": "string" },
+          "market": { "type": "string" },
+          "language": { "type": "string" },
+          "enabled": { "type": "boolean" }
+        }
+      },
+      "OperatingSettings": {
+        "type": "object",
+        "properties": {
+          "qualification_confidence": { "type": "number", "example": 0.75 },
+          "collection_interval_minutes": { "type": "integer", "example": 15 },
+          "timezone": { "type": "string", "example": "Asia/Karachi" },
+          "raw_excerpt_retention_days": { "type": "integer", "example": 90 },
+          "daily_web_search_cap": { "type": "integer", "example": 500 },
+          "alert_email": { "type": "string", "example": "sales-alerts@novu.invalid" }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "detail": { "type": "string" },
+          "code": { "type": "string" },
+          "errors": { "type": "object" }
+        }
+      }
+    }
+  }
+}

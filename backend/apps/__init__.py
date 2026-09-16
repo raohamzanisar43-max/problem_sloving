@@ -1,0 +1,1 @@
+# Novu apps package
