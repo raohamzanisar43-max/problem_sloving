@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { getOpportunities, downloadCsv } from '../api/client'
 import OpportunityTable from '../components/OpportunityTable'
 
@@ -37,7 +37,6 @@ export default function Opportunities({ onOpenLead }) {
   const [count, setCount] = useState(0)
   const [nextCursor, setNextCursor] = useState(null)
   const [loading, setLoading] = useState(false)
-  const filtersRef = useRef({ search, service, status })
 
   const load = useCallback(async (cursor = null, append = false) => {
     setLoading(true)
@@ -63,7 +62,6 @@ export default function Opportunities({ onOpenLead }) {
   }, [search, service, status])
 
   useEffect(() => {
-    filtersRef.current = { search, service, status }
     setNextCursor(null)
     load(null, false)
   }, [load])

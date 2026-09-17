@@ -77,8 +77,10 @@ api.interceptors.response.use(
     const originalRequest = error.config
     if (
       error.response?.status === 401 &&
+      originalRequest &&
       !originalRequest._retry &&
-      !originalRequest.url?.includes('/auth/token/')
+      !originalRequest.url?.includes('/auth/token/') &&
+      !originalRequest.url?.includes('/auth/token/refresh/')
     ) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
@@ -153,8 +155,7 @@ export async function getUsers() {
 
 export async function switchUserRole(username) {
   const password = DEMO_CREDENTIALS[username] || 'admin123'
-  await login(username, password)
-  window.location.reload()
+  return login(username, password)
 }
 
 // ----------------------------------------------------------------------------

@@ -15,7 +15,7 @@ Covers acceptance checks AC-01 through AC-12:
 """
 import unittest
 from datetime import date, timedelta
-from reference_pipeline import (
+from backend.reference_pipeline import (
     canonicalize_url,
     compute_content_hash,
     verify_evidence_substring,

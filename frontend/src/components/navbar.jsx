@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
-import { getDuplicateCount, USERS, switchUserRole } from '../api/client'
+import { getDuplicateCount, switchUserRole } from '../api/client'
 
 const NAV = [
   { path: '/', label: 'Overview', icon: '📊' },
@@ -26,20 +26,26 @@ const META = {
   '/settings': ['Operating Settings', 'Live operating parameters running in this intelligence workspace.'],
 }
 
-export default function Layout({ user, onLogout, currentPath, children }) {
+export default function Layout({ user, onLogout, onSwitchUser, currentPath, children }) {
   const navigate = useNavigate()
   const meta = META[currentPath] || META['/']
   const [pendingDups, setPendingDups] = useState(0)
+  const [switchError, setSwitchError] = useState('')
+  const isActive = (path) => path === '/' ? currentPath === '/' : currentPath.startsWith(path)
 
   useEffect(() => {
     getDuplicateCount().then(setPendingDups).catch(() => {})
   }, [currentPath])
 
   const switchRole = async (newRoleUsername) => {
+    if (newRoleUsername === user?.username) return
+    setSwitchError('')
     try {
-      await switchUserRole(newRoleUsername)
+      const { user: nextUser } = await switchUserRole(newRoleUsername)
+      onSwitchUser(nextUser)
     } catch (err) {
       console.error('Failed to switch role', err)
+      setSwitchError(err.response?.data?.detail || 'Could not switch role. Run seed_demo to create the demo accounts.')
     }
   }
 
@@ -58,9 +64,10 @@ export default function Layout({ user, onLogout, currentPath, children }) {
         <nav className="nav" aria-label="Application navigation">
           {NAV.map((item) => (
             <button
+              type="button"
               key={item.path}
               data-page={item.path}
-              aria-current={currentPath === item.path ? 'page' : undefined}
+              aria-current={isActive(item.path) ? 'page' : undefined}
               onClick={() => navigate(item.path)}
             >
               <span style={{ marginRight: 8, fontSize: 13 }}>{item.icon}</span>
@@ -94,9 +101,11 @@ export default function Layout({ user, onLogout, currentPath, children }) {
                 <option value="executive">Sales Executive A</option>
                 <option value="executive_b">Sales Executive B</option>
               </select>
+              {switchError && <p className="sidebar-error" role="alert">{switchError}</p>}
             </div>
 
             <button
+              type="button"
               className="secondary sign-out-btn"
               onClick={onLogout}
             >

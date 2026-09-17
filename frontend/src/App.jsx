@@ -61,12 +61,21 @@ export default function App() {
 
   return (
     <>
-      <Layout user={user} onLogout={handleLogout} currentPath={location.pathname}>
+      <Layout
+        user={user}
+        onLogout={handleLogout}
+        onSwitchUser={(nextUser) => {
+          setUser(nextUser)
+          setSelectedLead(null)
+          navigate('/')
+        }}
+        currentPath={location.pathname}
+      >
         <Routes>
           <Route path="/" element={<Overview onOpenLead={setSelectedLead} />} />
           <Route path="/opportunities" element={<Opportunities onOpenLead={setSelectedLead} />} />
           <Route path="/capture" element={<Capture onOpenLead={setSelectedLead} />} />
-          <Route path="/sources" element={<Sources />} />
+          <Route path="/sources" element={<Sources userRole={user.role} />} />
           <Route path="/rules" element={<Rules />} />
           <Route path="/pipeline" element={<Pipeline onOpenLead={setSelectedLead} />} />
           <Route path="/duplicates" element={<Duplicates />} />

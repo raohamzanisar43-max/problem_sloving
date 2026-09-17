@@ -6,13 +6,35 @@ import {
   getDrafts,
   getOpportunity,
   getUsers,
+  SUPPORTED_CATEGORIES,
   updateOpportunity,
 } from '../api/client'
 
 const DRAFTABLE = ['reviewed', 'contacted', 'meeting', 'proposal', 'won']
 
+// Extracted facts a sales user may correct by hand. Keep in step with
+// EDITABLE_DETAIL_FIELDS in the opportunities serializer.
+const DETAIL_FIELDS = [
+  ['requirement', 'Requirement'],
+  ['primary_category', 'Service category'],
+  ['company_name', 'Company'],
+  ['company_domain', 'Company domain'],
+  ['country', 'Country'],
+  ['industry', 'Industry'],
+  ['budget_text', 'Budget'],
+  ['deadline', 'Deadline', 'date'],
+  ['contact_name', 'Contact name'],
+  ['contact_designation', 'Contact designation'],
+  ['email', 'Email', 'email'],
+  ['phone', 'Phone', 'tel'],
+]
+
+const detailsFrom = (data) =>
+  Object.fromEntries(DETAIL_FIELDS.map(([key]) => [key, data[key] || '']))
+
 export default function LeadDetail({ leadId, onClose, onSaved }) {
   const [lead, setLead] = useState(null)
+  const [loadError, setLoadError] = useState('')
   const [users, setUsers] = useState([])
   const [activities, setActivities] = useState([])
   const [contacts, setContacts] = useState([])
@@ -20,6 +42,8 @@ export default function LeadDetail({ leadId, onClose, onSaved }) {
   const [status, setStatus] = useState('')
   const [owner, setOwner] = useState('')
   const [notes, setNotes] = useState('')
+  const [details, setDetails] = useState({})
+  const [editing, setEditing] = useState(false)
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
   const [drafting, setDrafting] = useState(false)
@@ -28,10 +52,15 @@ export default function LeadDetail({ leadId, onClose, onSaved }) {
   const loadLead = () =>
     getOpportunity(leadId).then((data) => {
       setLead(data)
+      setLoadError('')
       setStatus(data.status)
       setOwner(data.owner || '')
       setNotes(data.notes || '')
+      setDetails(detailsFrom(data))
+      setEditing(false)
       return data
+    }).catch((err) => {
+      setLoadError(err.response?.data?.detail || 'Could not load this opportunity.')
     })
 
   const loadSidecars = () => {
@@ -43,12 +72,22 @@ export default function LeadDetail({ leadId, onClose, onSaved }) {
   }
 
   useEffect(() => {
+    setLead(null)
+    setLoadError('')
     loadLead()
     loadSidecars()
     getUsers()
       .then((data) => setUsers(data.results || data))
       .catch(() => setMessage('Could not load the assignment list.'))
   }, [leadId])
+
+  useEffect(() => {
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [onClose])
 
   const save = async () => {
     setBusy(true)
@@ -57,14 +96,22 @@ export default function LeadDetail({ leadId, onClose, onSaved }) {
         status,
         owner: owner || null,
         notes,
+        ...(editing ? { ...details, deadline: details.deadline || null } : {}),
         expected_revision: lead.revision,
       })
       setLead(updated)
-      setMessage('Saved: Status and assignment updated.')
+      setDetails(detailsFrom(updated))
+      setEditing(false)
+      setMessage('Saved: Lead updated.')
       loadSidecars()
       onSaved?.()
     } catch (err) {
-      setMessage(err.response?.data?.expected_revision?.[0] || 'Save failed')
+      const body = err.response?.data || {}
+      const fieldError = DETAIL_FIELDS.find(([key]) => body[key])
+      setMessage(
+        body.expected_revision?.[0] ||
+          (fieldError ? `${fieldError[1]}: ${body[fieldError[0]][0]}` : 'Save failed')
+      )
     } finally {
       setBusy(false)
     }
@@ -84,19 +131,27 @@ export default function LeadDetail({ leadId, onClose, onSaved }) {
   }
 
   const copyDraft = (text) => {
+    if (!navigator.clipboard?.writeText) {
+      setMessage('Copy is unavailable in this browser. Select the draft text and copy it manually.')
+      return
+    }
     navigator.clipboard.writeText(text)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+      .then(() => {
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
+      })
+      .catch(() => setMessage('Copy failed. Select the draft text and copy it manually.'))
   }
 
   if (!lead) {
     return (
-      <div className="modal-backdrop" onClick={onClose}>
-        <div className="detail" onClick={(e) => e.stopPropagation()}>
+      <div className="modal-backdrop" onClick={onClose} role="presentation">
+        <div className="detail" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Opportunity details">
           <div className="dialog-top">
-            <p>Loading details…</p>
-            <button className="close" onClick={onClose}>×</button>
+            <p>{loadError || 'Loading details…'}</p>
+            <button type="button" className="close" onClick={onClose} aria-label="Close">×</button>
           </div>
+          {loadError && <div className="dialog-content"><button type="button" className="secondary" onClick={loadLead}>Try again</button></div>}
         </div>
       </div>
     )
@@ -113,8 +168,8 @@ export default function LeadDetail({ leadId, onClose, onSaved }) {
   const canDraft = DRAFTABLE.includes(status || lead.status)
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="detail" onClick={(e) => e.stopPropagation()}>
+    <div className="modal-backdrop" onClick={onClose} role="presentation">
+      <div className="detail" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Opportunity details">
         <div className="dialog-top">
           <div>
             <div className="minor">
@@ -122,7 +177,7 @@ export default function LeadDetail({ leadId, onClose, onSaved }) {
             </div>
             <h2 style={{ margin: '6px 0 0', fontSize: 20 }}>{lead.requirement}</h2>
           </div>
-          <button className="close" onClick={onClose} aria-label="Close">×</button>
+          <button type="button" className="close" onClick={onClose} aria-label="Close">×</button>
         </div>
 
         <div className="dialog-content">
@@ -151,17 +206,66 @@ export default function LeadDetail({ leadId, onClose, onSaved }) {
               </div>
             )}
 
-            <h3 style={{ marginTop: 20 }}>Fact Provenance & Verification</h3>
+            <div className="facts-heading">
+              <h3>Fact Provenance & Verification</h3>
+              <button
+                type="button"
+                className="secondary"
+                style={{ fontSize: 12, padding: '4px 10px' }}
+                onClick={() => {
+                  if (editing) setDetails(detailsFrom(lead))
+                  setEditing(!editing)
+                }}
+              >
+                {editing ? 'Cancel edit' : 'Edit details'}
+              </button>
+            </div>
+            {editing ? (
+            <div className="facts">
+              {DETAIL_FIELDS.map(([key, label, type]) => (
+                <div className={`fact${key === 'requirement' ? ' fact-wide' : ''}`} key={key}>
+                  <label htmlFor={`lead-${key}`}><small>{label}</small></label>
+                  {key === 'primary_category' ? (
+                    <select
+                      id={`lead-${key}`}
+                      value={details[key]}
+                      onChange={(e) => setDetails({ ...details, [key]: e.target.value })}
+                    >
+                      <option value="">None</option>
+                      {SUPPORTED_CATEGORIES.map((c) => (
+                        <option key={c} value={c}>{c.replace(/_/g, ' ')}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      id={`lead-${key}`}
+                      type={type || 'text'}
+                      value={details[key]}
+                      onChange={(e) => setDetails({ ...details, [key]: e.target.value })}
+                    />
+                  )}
+                </div>
+              ))}
+              <p className="minor fact-wide">
+                Changes are saved with "Save Changes" and recorded in the activity timeline.
+                The score is not recalculated.
+              </p>
+            </div>
+            ) : (
             <div className="facts">
               {[
                 ['Company', lead.company_name || 'Unknown'],
+                ['Contact', [lead.contact_name, lead.contact_designation].filter(Boolean).join(' · ') || 'Unknown'],
+                ['Phone', lead.phone || 'Unavailable'],
                 ['Country', lead.country || 'Unknown'],
                 ['Budget', lead.budget_text || 'None published'],
                 ['Published', (lead.source_published_at || lead.detected_at || '').slice(0, 10) || '—'],
                 ['Email', lead.email || 'Unavailable'],
-                ['Verification', lead.contact_verification ? `${lead.contact_verification} · not mailbox verified` : 'Unavailable'],
+                ['Verification', lead.contact_verification === 'manual'
+                  ? 'Entered manually · not from source'
+                  : lead.contact_verification ? `${lead.contact_verification} · not mailbox verified` : 'Unavailable'],
                 ['Deadline', lead.deadline || 'None quoted'],
-                ['Evidence Path', lead.email ? 'Direct published business email' : 'Original source reference'],
+                ['Evidence Path', lead.email && lead.contact_verification !== 'manual' ? 'Direct published business email' : 'Original source reference'],
               ].map(([k, v]) => (
                 <div className="fact" key={k}>
                   <small>{k}</small>
@@ -169,6 +273,7 @@ export default function LeadDetail({ leadId, onClose, onSaved }) {
                 </div>
               ))}
             </div>
+            )}
 
             {contacts.length > 0 && (
               <>

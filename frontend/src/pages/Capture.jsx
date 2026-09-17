@@ -99,6 +99,7 @@ export default function Capture({ onOpenLead }) {
                   <p className="reason">{result.opportunity.review_reasons.join(' · ')}</p>
                 )}
                 <button
+                  type="button"
                   className="secondary"
                   style={{ marginTop: 8 }}
                   onClick={() => onOpenLead(result.opportunity.id)}

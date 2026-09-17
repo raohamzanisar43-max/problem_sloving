@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { login, getMe } from '../api/client'
+import { login } from '../api/client'
 
 export default function Login({ onLogin }) {
   const [username, setUsername] = useState('admin')
@@ -12,9 +12,8 @@ export default function Login({ onLogin }) {
     setBusy(true)
     setError('')
     try {
-      await login(username, password)
-      const me = await getMe()
-      onLogin(me)
+      const { user } = await login(username, password)
+      onLogin(user)
     } catch (err) {
       setError('Invalid credentials. Try admin / admin123 after running seed_demo.')
     } finally {
