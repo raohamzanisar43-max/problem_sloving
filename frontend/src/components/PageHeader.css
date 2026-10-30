@@ -1,0 +1,12 @@
+.page-header {
+  padding: 24px 32px 20px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-card);
+}
+
+.page-header-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--color-text);
+  margin: 0;
+}

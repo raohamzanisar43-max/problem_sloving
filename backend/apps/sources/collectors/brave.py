@@ -19,7 +19,7 @@ class BraveCollector(BaseCollector):
             logger.warning('BRAVE_API_KEY not set — skipping brave collection')
             return []
 
-        country = 'pk' if market == 'PK' else 'us'
+        country = 'ALL' if market == 'PK' else 'us'
         params = {
             'q': term_query,
             'count': 20,

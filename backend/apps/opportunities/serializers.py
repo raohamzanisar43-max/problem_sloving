@@ -63,12 +63,21 @@ class OpportunityDetailSerializer(serializers.ModelSerializer):
         ]
 
 
+# Extracted facts a sales user may correct by hand. Evidence, provenance and
+# score stay read-only so the audit trail always reflects the source.
+EDITABLE_DETAIL_FIELDS = (
+    'requirement', 'primary_category', 'company_name', 'company_domain',
+    'country', 'industry', 'budget_text', 'deadline',
+    'email', 'phone', 'contact_name', 'contact_designation',
+)
+
+
 class OpportunityUpdateSerializer(serializers.ModelSerializer):
     expected_revision = serializers.IntegerField(required=False, write_only=True)
 
     class Meta:
         model = Opportunity
-        fields = ('status', 'owner', 'notes', 'expected_revision')
+        fields = ('status', 'owner', 'notes', *EDITABLE_DETAIL_FIELDS, 'expected_revision')
 
     def validate(self, attrs):
         expected = attrs.pop('expected_revision', None)
@@ -84,16 +93,22 @@ class OpportunityUpdateSerializer(serializers.ModelSerializer):
 
         actor = self.context['request'].user
         changed = []
-        for field in ('status', 'owner', 'notes'):
+        for field in ('status', 'owner', 'notes', *EDITABLE_DETAIL_FIELDS):
             if field in validated_data and getattr(instance, field) != validated_data[field]:
                 changed.append(field)
                 Activity.objects.create(
                     opportunity=instance,
                     actor=actor,
                     action=f'{field}_change',
-                    from_value=str(getattr(instance, field) or ''),
-                    to_value=str(validated_data[field] or ''),
+                    from_value=str(getattr(instance, field) or '')[:255],
+                    to_value=str(validated_data[field] or '')[:255],
                 )
+        # A hand-entered contact was not found in the source, so it must not
+        # keep claiming to be a published one (handover §8).
+        if {'email', 'phone'} & set(changed):
+            validated_data['contact_verification'] = 'manual' if (
+                validated_data.get('email', instance.email) or validated_data.get('phone', instance.phone)
+            ) else ''
         instance = super().update(instance, validated_data)
         instance.revision += 1
         instance.save(update_fields=['revision', 'updated_at'])
