@@ -32,7 +32,7 @@ services:
       POSTGRES_HOST: db
       RUN_MIGRATIONS: "true"
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/api/v1/', timeout=3)"]
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen(u.Request('http://127.0.0.1:8000/api/v1/', headers={'X-Forwarded-Proto': 'https'}), timeout=3)"]
       interval: 15s
       timeout: 5s
       retries: 5
