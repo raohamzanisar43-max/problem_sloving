@@ -58,3 +58,59 @@ class ExtractionInputTests(TestCase):
         self.assertIn('RFP: website redesign', out)
         self.assertIn('https://example.org/rfp', out)
         self.assertTrue(out.endswith('We seek a vendor.'))
+
+
+class ContentPageFilterTests(TestCase):
+    def _obs(self, title, url='https://example.org/x'):
+        from types import SimpleNamespace
+        return SimpleNamespace(title=title, original_url=url, text='')
+
+    def test_listicles_guides_templates_and_directories_are_filtered(self):
+        from apps.sources.tasks import is_content_page
+        for title in (
+            'Top 12 Scalable Web Development Companies for SMEs in Pakistan',
+            'Best Healthcare VMS Companies in 2026',
+            'How to Choose an AI Automation Agency',
+            'ERP Implementation Proposal Template for Projects',
+            'Website Redesign RFP Example',
+            'Top Mobile App Development Companies in Punjab',
+        ):
+            self.assertTrue(is_content_page(self._obs(title)), title)
+        self.assertTrue(is_content_page(self._obs('Anything', 'https://www.clutch.co/profile/x')))
+
+    def test_real_requests_are_not_filtered(self):
+        from apps.sources.tasks import is_content_page
+        for title in (
+            'RFP: Website Redesign and Hosting Services',
+            'Request for Proposals - Website Management',
+            'Need ecommerce website built for my bakery in Karachi',
+            'Tender for development of web portal',
+        ):
+            self.assertFalse(is_content_page(self._obs(title)), title)
+
+
+class ExtractionUnavailableTests(TestCase):
+    def test_quota_failure_defers_instead_of_saving_a_stub_lead(self):
+        from datetime import datetime, timezone as tz
+        from unittest.mock import patch
+        from apps.observations.models import Observation
+        from apps.opportunities.models import Opportunity
+        from apps.scoring.llm import ExtractionUnavailable
+        from apps.sources.tasks import collect_source
+
+        source = Source.objects.create(name='Web', connector_type='web_search', enabled=True)
+        Observation.objects.create(
+            source=source, external_id='1', title='Need a website built', text='We need a website built for our clinic.',
+            original_url='https://example.org/1', source_published_at=datetime(2026, 11, 1, tzinfo=tz.utc),
+        )
+
+        class Broken:
+            def extract(self, text):
+                raise ExtractionUnavailable('429 quota')
+
+        with patch('apps.sources.tasks._import_collector') as imp, patch('apps.scoring.llm.LLMClient', return_value=Broken()):
+            imp.return_value = lambda src: type('C', (), {'run': lambda self, run, terms: (0, 0, 0, [])})()
+            counters = collect_source(str(source.id))
+
+        self.assertEqual(Opportunity.objects.count(), 0)
+        self.assertEqual(counters['deferred'], 1)

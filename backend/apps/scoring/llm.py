@@ -63,6 +63,10 @@ def extraction_system_prompt() -> str:
     )
 
 
+class ExtractionUnavailable(Exception):
+    """The configured model could not be reached or refused the request (quota, outage)."""
+
+
 class StubClient:
     """Offline stub — returns template-level output without any API call."""
 
@@ -120,7 +124,7 @@ class OpenAIClient:
             return json.loads(resp.choices[0].message.content)
         except Exception as exc:
             logger.error('OpenAI extract failed: %s', exc)
-            return StubClient().extract(text)
+            raise ExtractionUnavailable(str(exc)) from exc
 
     def draft(self, opportunity) -> tuple[str, str]:
         profile = profile_summary()
@@ -169,7 +173,7 @@ class GeminiClient:
             return json.loads(raw)
         except Exception as exc:
             logger.error('Gemini extract failed: %s', exc)
-            return StubClient().extract(text)
+            raise ExtractionUnavailable(str(exc)) from exc
 
     def draft(self, opportunity) -> tuple[str, str]:
         profile = profile_summary()
@@ -218,7 +222,7 @@ class GroqClient:
             return json.loads(resp.choices[0].message.content)
         except Exception as exc:
             logger.error('Groq extract failed: %s', exc)
-            return StubClient().extract(text)
+            raise ExtractionUnavailable(str(exc)) from exc
 
     def draft(self, opportunity) -> tuple[str, str]:
         profile = profile_summary()

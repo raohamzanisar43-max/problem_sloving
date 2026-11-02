@@ -33,6 +33,27 @@ def _import_collector(dotted_path):
     return getattr(mod, class_name)
 
 
+# Pages that can never be a buyer: listicles, guides, templates and agency directories. Rejecting them
+# before extraction keeps them out of the sales queue and saves model tokens.
+_CONTENT_TITLE = re.compile(
+    r"^(the\s+)?(top|best)\b|\b(top|best)\s+\d+|\bhow to\b|\bwhat (is|are|does)\b|\bguide\b|"
+    r"\btemplates?\b|\bexamples?\b|\bchecklist\b|\bvs\.?\s|\b(companies|agencies|firms) in\b|\bdirectory\b",
+    re.I,
+)
+_DIRECTORY_DOMAINS = (
+    'clutch.co', 'goodfirms.co', 'designrush.com', 'sortlist.com', 'techreviewer.co',
+    'superbcompanies.com', 'themanifest.com', 'topdevelopers.co',
+)
+
+
+def is_content_page(observation):
+    """True for obvious non-buyer pages (see above)."""
+    if _CONTENT_TITLE.search(observation.title or ''):
+        return True
+    url = (observation.original_url or '').lower()
+    return any(domain in url for domain in _DIRECTORY_DOMAINS)
+
+
 def extraction_input(observation):
     """Give the model the page title and URL as well as the snippet: they show what kind of page it is."""
     return '\n'.join([
@@ -55,7 +76,13 @@ def _extract_and_score(observation, source, llm):
     from apps.opportunities.models import Opportunity, OpportunityObservation
     from apps.scoring.engine import compute_score
 
-    fields = llm.extract(extraction_input(observation)) or {}
+    if is_content_page(observation):
+        fields = {
+            'requirement': observation.title, 'intent': 'nonbuyer', 'kind': 'other',
+            'categories': [], 'confidence': 1.0,
+        }
+    else:
+        fields = llm.extract(extraction_input(observation)) or {}
 
     score_result = compute_score(
         intent=fields.get('intent', 'uncertain'),
@@ -147,7 +174,7 @@ def collect_source(self, source_id, run_id=None):
     triggered run does not produce a second, orphaned record.
     """
     from apps.observations.models import Observation
-    from apps.scoring.llm import LLMClient
+    from apps.scoring.llm import ExtractionUnavailable, LLMClient
     from apps.sources.models import Run, SearchTerm, Source
 
     try:
@@ -209,12 +236,21 @@ def collect_source(self, source_id, run_id=None):
         linked_opportunities__isnull=True,
     ).order_by('-fetched_at')[:200]
 
+    batch = list(unprocessed)
     qualified = 0
     extraction_errors = 0
-    for obs in unprocessed:
+    deferred = 0
+    for position, obs in enumerate(batch):
         try:
             if _extract_and_score(obs, source, llm):
                 qualified += 1
+        except ExtractionUnavailable as exc:
+            # Quota or outage: keep the rest unscored so they retry on the next run, rather than
+            # saving empty stub leads. No point hammering the model for the remainder of this batch.
+            logger.error('Extraction unavailable, deferring remaining observations: %s', exc)
+            deferred = len(batch) - position
+            extraction_errors += 1
+            break
         except Exception as exc:
             extraction_errors += 1
             logger.exception('Extraction failed for observation %s: %s', obs.id, exc)
@@ -225,6 +261,7 @@ def collect_source(self, source_id, run_id=None):
         'duplicates': duplicates,
         'errors': len(errors) + extraction_errors,
         'qualified': qualified,
+        'deferred': deferred,
     }
     run.counters = counters
     run.save(update_fields=['counters'])
