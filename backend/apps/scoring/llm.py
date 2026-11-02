@@ -41,6 +41,13 @@ EXTRACTION_GUIDANCE = (
     'intent=uncertain. '
     'Agencies, freelancers, platforms or companies advertising their own services, portfolios, pricing, '
     'templates, tutorials, "top 10" lists and directories are intent=nonbuyer with kind=seller_promotion. '
+    'Educational or content-marketing pages are also intent=nonbuyer (kind=other): blog posts, guides, '
+    'how-tos, checklists, glossaries, news articles, case studies, comparison pages, and RFP templates, '
+    'samples or "examples" that show how to write a request rather than make one. '
+    'A genuine buyer is a specific person or organisation, named or identifiable, who describes a concrete '
+    'need and asks for proposals, bids or help - for example a tender notice, a published RFP, or a '
+    'forum or social post asking for someone to build something. The input starts with the page title and '
+    'URL; use them as evidence of what kind of page this is. '
     'Use primary_category WEBSITE for website, redesign or e-commerce needs, and the matching category for '
     'larger projects. Give the buyer country when stated, and keep confidence low when the text is vague.'
 )

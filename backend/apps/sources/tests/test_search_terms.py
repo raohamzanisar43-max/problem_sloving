@@ -47,3 +47,14 @@ class BraveAgeTests(TestCase):
 
     def test_pakistan_is_not_sent_as_a_brave_country(self):
         self.assertNotIn('PK', MARKET_COUNTRY)
+
+
+class ExtractionInputTests(TestCase):
+    def test_model_sees_title_and_url_with_the_snippet(self):
+        from types import SimpleNamespace
+        from apps.sources.tasks import extraction_input
+        obs = SimpleNamespace(title='RFP: website redesign', original_url='https://example.org/rfp', text='We seek a vendor.')
+        out = extraction_input(obs)
+        self.assertIn('RFP: website redesign', out)
+        self.assertIn('https://example.org/rfp', out)
+        self.assertTrue(out.endswith('We seek a vendor.'))

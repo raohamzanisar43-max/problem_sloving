@@ -33,6 +33,16 @@ def _import_collector(dotted_path):
     return getattr(mod, class_name)
 
 
+def extraction_input(observation):
+    """Give the model the page title and URL as well as the snippet: they show what kind of page it is."""
+    return '\n'.join([
+        f'Title: {observation.title}',
+        f'URL: {observation.original_url}',
+        '',
+        observation.text,
+    ])
+
+
 def _extract_and_score(observation, source, llm):
     """
     Run extraction + scoring for one Observation and persist the resulting
@@ -45,7 +55,7 @@ def _extract_and_score(observation, source, llm):
     from apps.opportunities.models import Opportunity, OpportunityObservation
     from apps.scoring.engine import compute_score
 
-    fields = llm.extract(observation.text) or {}
+    fields = llm.extract(extraction_input(observation)) or {}
 
     score_result = compute_score(
         intent=fields.get('intent', 'uncertain'),
