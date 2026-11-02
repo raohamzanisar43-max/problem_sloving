@@ -31,6 +31,31 @@ EXTRACTION_SCHEMA = {
 }
 
 
+EXTRACTION_GUIDANCE = (
+    'Novu Labs sells websites, e-commerce sites, web applications, mobile apps, ERP/CRM/LMS systems, '
+    'AI and automation, and other custom software projects. Judge the text as a sales researcher looking '
+    'for BUYERS who want to commission such a project. '
+    'Use intent=buyer with kind=direct_purchase (or rfp for a formal tender/proposal request) only when the '
+    'author or organisation is seeking to have a website or software project built or bought. '
+    'Job postings, recruitment, vacancies, internships and "join our team" text are kind=hiring_signal with '
+    'intent=uncertain. '
+    'Agencies, freelancers, platforms or companies advertising their own services, portfolios, pricing, '
+    'templates, tutorials, "top 10" lists and directories are intent=nonbuyer with kind=seller_promotion. '
+    'Use primary_category WEBSITE for website, redesign or e-commerce needs, and the matching category for '
+    'larger projects. Give the buyer country when stated, and keep confidence low when the text is vague.'
+)
+
+
+def extraction_system_prompt() -> str:
+    return (
+        'You are an opportunity extraction assistant. '
+        'Extract structured fields from the given source text. '
+        f'{EXTRACTION_GUIDANCE} '
+        f'Return ONLY valid JSON matching this schema: {json.dumps(EXTRACTION_SCHEMA)}. '
+        'Do not infer facts not present in the text. Set unknown fields to blank or null.'
+    )
+
+
 class StubClient:
     """Offline stub — returns template-level output without any API call."""
 
@@ -76,12 +101,7 @@ class OpenAIClient:
         self._model = settings.RADAR.get('LLM_MODEL', 'gpt-4o-mini')
 
     def extract(self, text: str) -> dict:
-        system = (
-            'You are an opportunity extraction assistant. '
-            'Extract structured fields from the given source text. '
-            f'Return ONLY valid JSON matching this schema: {json.dumps(EXTRACTION_SCHEMA)}. '
-            'Do not infer facts not present in the text. Set unknown fields to blank or null.'
-        )
+        system = extraction_system_prompt()
         try:
             resp = self._client.chat.completions.create(
                 model=self._model,
@@ -127,12 +147,7 @@ class GeminiClient:
         self._model = settings.RADAR.get('LLM_MODEL', 'gemini-2.0-flash')
 
     def extract(self, text: str) -> dict:
-        system = (
-            'You are an opportunity extraction assistant. '
-            'Extract structured fields from the given source text. '
-            f'Return ONLY valid JSON matching this schema: {json.dumps(EXTRACTION_SCHEMA)}. '
-            'Do not infer facts not present in the text. Set unknown fields to blank or null.'
-        )
+        system = extraction_system_prompt()
         try:
             resp = self._client.models.generate_content(
                 model=self._model,
@@ -184,12 +199,7 @@ class GroqClient:
         self._model = settings.RADAR.get('LLM_MODEL', 'llama-3.3-70b-versatile')
 
     def extract(self, text: str) -> dict:
-        system = (
-            'You are an opportunity extraction assistant. '
-            'Extract structured fields from the given source text. '
-            f'Return ONLY valid JSON matching this schema: {json.dumps(EXTRACTION_SCHEMA)}. '
-            'Do not infer facts not present in the text. Set unknown fields to blank or null.'
-        )
+        system = extraction_system_prompt()
         try:
             resp = self._client.chat.completions.create(
                 model=self._model,
