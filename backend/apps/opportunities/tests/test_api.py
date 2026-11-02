@@ -92,6 +92,39 @@ class OpportunityDetailTests(TestCase):
         self.opp.refresh_from_db()
         self.assertEqual(self.opp.status, 'reviewed')
 
+    def test_patch_corrects_extracted_details(self):
+        resp = self.client.patch(
+            f'/api/v1/opportunities/{self.opp.id}/',
+            {
+                'company_name': 'Acme Traders',
+                'country': 'Pakistan',
+                'deadline': '2026-12-31',
+                'email': 'buyer@acme.example',
+                'expected_revision': self.opp.revision,
+            },
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data['company_name'], 'Acme Traders')
+        self.assertEqual(data['deadline'], '2026-12-31')
+        # A hand-typed address is labelled as such, never as published.
+        self.assertEqual(data['contact_verification'], 'manual')
+        self.assertTrue(
+            self.opp.activities.filter(action='company_name_change', to_value='Acme Traders').exists()
+        )
+
+    def test_patch_cannot_change_score_or_evidence(self):
+        self.client.patch(
+            f'/api/v1/opportunities/{self.opp.id}/',
+            {'score': 100, 'text': 'rewritten', 'source_url': 'https://evil.example'},
+            format='json',
+        )
+        self.opp.refresh_from_db()
+        self.assertEqual(self.opp.score, 75)
+        self.assertEqual(self.opp.text, 'We need an ERP system for our 200 staff.')
+        self.assertEqual(self.opp.source_url, '')
+
 
 class StatsTests(TestCase):
     def setUp(self):

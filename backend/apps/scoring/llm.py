@@ -168,11 +168,69 @@ class GeminiClient:
             logger.error('Gemini draft failed: %s', exc)
             return StubClient().draft(opportunity)
 
+class GroqClient:
+    """
+    Groq's free tier allows far more requests per day than Gemini's free
+    tier, so this is used once the Gemini daily quota runs out. Groq exposes
+    an OpenAI-compatible API, so this re-uses the `openai` package with a
+    different base URL.
+    """
+    def __init__(self):
+        import openai
+        self._client = openai.OpenAI(
+            api_key=settings.RADAR['LLM_API_KEY'],
+            base_url='https://api.groq.com/openai/v1',
+        )
+        self._model = settings.RADAR.get('LLM_MODEL', 'llama-3.3-70b-versatile')
 
+    def extract(self, text: str) -> dict:
+        system = (
+            'You are an opportunity extraction assistant. '
+            'Extract structured fields from the given source text. '
+            f'Return ONLY valid JSON matching this schema: {json.dumps(EXTRACTION_SCHEMA)}. '
+            'Do not infer facts not present in the text. Set unknown fields to blank or null.'
+        )
+        try:
+            resp = self._client.chat.completions.create(
+                model=self._model,
+                messages=[{'role': 'system', 'content': system},
+                           {'role': 'user', 'content': text[:3000]}],
+                response_format={'type': 'json_object'},
+                temperature=0,
+            )
+            return json.loads(resp.choices[0].message.content)
+        except Exception as exc:
+            logger.error('Groq extract failed: %s', exc)
+            return StubClient().extract(text)
+
+    def draft(self, opportunity) -> tuple[str, str]:
+        profile = profile_summary()
+        prompt = (
+            f"Company profile:\n{profile}\n\n"
+            f"Buyer requirement: {opportunity.requirement}\n"
+            f"Company: {opportunity.company_name or 'Unknown'}\n"
+            f"Category: {opportunity.primary_category or 'software services'}\n"
+            f"Budget: {opportunity.budget_text or 'not stated'}\n\n"
+            "Write a concise, professional outreach email (≤150 words) from Novu Labs "
+            "to this prospect. Be specific about how Novu can help. "
+            "Do not make up facts. End with a clear call to action."
+        )
+        try:
+            resp = self._client.chat.completions.create(
+                model=self._model,
+                messages=[{'role': 'user', 'content': prompt}],
+                temperature=0.4,
+            )
+            content = resp.choices[0].message.content
+            return content, f'{self._model}-draft-v1'
+        except Exception as exc:
+            logger.error('Groq draft failed: %s', exc)
+            return StubClient().draft(opportunity)
 PROVIDERS = {
     'openai': (OpenAIClient, 'openai'),
     'azure': (OpenAIClient, 'openai'),
     'gemini': (GeminiClient, 'google-genai'),
+    'groq': (GroqClient, 'openai'),
     'stub': (StubClient, None),
 }
 

@@ -1,0 +1,119 @@
+import { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import apiClient from '../api/apiClient';
+import './DashboardPage.css';
+
+interface Opportunity {
+  id: string;
+  requirement: string;
+  score: number;
+  band: string;
+  detected_at?: string;
+}
+
+interface DashboardStats {
+  today: number;
+  hot: number;
+  review: number;
+  contacted: number;
+}
+
+export default function DashboardPage() {
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<DashboardStats>({ today: 0, hot: 0, review: 0, contacted: 0 });
+  const [latest, setLatest] = useState<Opportunity[]>([]);
+  const navigate = useNavigate();
+
+  const loadDashboard = useCallback(async () => {
+    try {
+      const [baseline, hot, review, contacted] = await Promise.all([
+        apiClient.get('/opportunities/', { params: { ordering: '-detected_at' } }),
+        apiClient.get('/opportunities/', { params: { band: 'Hot' } }),
+        apiClient.get('/opportunities/', { params: { status: 'review' } }),
+        apiClient.get('/opportunities/', { params: { status: 'contacted' } }),
+      ]);
+
+      const results: Opportunity[] = baseline.data.results ?? baseline.data;
+      const todayStr = new Date().toDateString();
+      const todayCount = results.filter(
+        (o) => o.detected_at && new Date(o.detected_at).toDateString() === todayStr
+      ).length;
+
+      setStats({
+        today: todayCount,
+        hot: hot.data.count ?? 0,
+        review: review.data.count ?? 0,
+        contacted: contacted.data.count ?? 0,
+      });
+      setLatest(results.slice(0, 3));
+    } catch (err) {
+      console.log('Error loading dashboard:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadDashboard();
+  }, [loadDashboard]);
+
+  if (loading) {
+    return <div className="dashboard-loading">Loading...</div>;
+  }
+
+  return (
+    <div className="dashboard-page">
+      <h1 className="dashboard-welcome">Welcome back</h1>
+
+      <div className="dashboard-stats-grid">
+        <StatTile label="Today's Opportunities" value={stats.today} colorVar="--color-primary" />
+        <StatTile label="Hot Opportunities" value={stats.hot} colorVar="--color-hot" />
+        <StatTile
+          label="Under Review"
+          value={stats.review}
+          colorVar="--color-text-muted"
+          onClick={() => navigate('/review')}
+        />
+        <StatTile label="Contacted" value={stats.contacted} colorVar="--color-info" />
+      </div>
+
+            <button className="dashboard-primary-button" onClick={() => navigate('/opportunities')}>
+        View All Opportunities →
+      </button>
+
+            <h2 className="dashboard-section-title">Latest Opportunities</h2>
+      {latest.length === 0 && <p className="dashboard-empty">No opportunities yet.</p>}
+      <div className="dashboard-latest-grid">
+        {latest.map((item) => (
+          <div key={item.id} className="dashboard-latest-card" onClick={() => navigate(`/lead/${item.id}`)}>
+            <p className="dashboard-latest-title">{item.requirement ?? 'Untitled'}</p>
+            <p className="dashboard-latest-meta">
+              {item.band} · Score {item.score}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function StatTile({
+  label,
+  value,
+  colorVar,
+  onClick,
+}: {
+  label: string;
+  value: number;
+  colorVar: string;
+  onClick?: () => void;
+}) {
+  return (
+    <div className={`dashboard-stat-tile${onClick ? ' clickable' : ''}`} onClick={onClick}>
+      <p className="dashboard-stat-value" style={{ color: `var(${colorVar})` }}>
+        {value}
+      </p>
+      <p className="dashboard-stat-label">{label}</p>
+    </div>
+  );
+}
