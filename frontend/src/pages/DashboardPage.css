@@ -151,3 +151,22 @@
 .dashboard-freshness-grid {
   grid-template-columns: repeat(3, 1fr);
 }
+
+.dashboard-error {
+  background: #fdf0ee;
+  border: 1px solid #e8b4ac;
+  border-radius: var(--radius-md);
+  color: #8a2c1f;
+  padding: 10px 14px;
+  margin: 0 0 16px;
+}
+
+.dashboard-retry {
+  background: none;
+  border: none;
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}

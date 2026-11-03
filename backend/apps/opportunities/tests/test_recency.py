@@ -73,3 +73,23 @@ class RecencyTests(TestCase):
         self.assertEqual(posted['week'], 3)
         self.assertEqual(posted['month'], 4)
         self.assertEqual(posted['older'], 1)
+
+
+class ActionableFilterTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.client.force_authenticate(User.objects.create_user(username='mgr2', password='x', role='sales_manager'))
+        lead('open', published_days_ago=1, status='new')
+        lead('in-review', published_days_ago=1, status='review')
+        lead('dismissed', published_days_ago=1, status='rejected')
+        lead('done', published_days_ago=1, status='closed')
+
+    def names(self, **params):
+        return {o['requirement'] for o in self.client.get('/api/v1/opportunities/', params).json()['results']}
+
+    def test_actionable_hides_rejected_and_closed(self):
+        self.assertEqual(self.names(actionable='true'), {'open', 'in-review'})
+
+    def test_default_is_unchanged_and_status_still_works(self):
+        self.assertEqual(len(self.names()), 4)
+        self.assertEqual(self.names(status='rejected'), {'dismissed'})

@@ -28,12 +28,14 @@ interface PostedCounts {
 
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [stats, setStats] = useState<DashboardStats>({ collected: 0, hot: 0, review: 0, contacted: 0 });
   const [posted, setPosted] = useState<PostedCounts>({ today: 0, week: 0, month: 0 });
   const [latest, setLatest] = useState<Opportunity[]>([]);
   const navigate = useNavigate();
 
   const loadDashboard = useCallback(async () => {
+    setLoadError(false);
     try {
       const [baseline, summary, hot, review, contacted] = await Promise.all([
         apiClient.get('/opportunities/', { params: { ordering: '-detected_at' } }),
@@ -59,6 +61,7 @@ export default function DashboardPage() {
       setLatest(results.slice(0, 3));
     } catch (err) {
       console.log('Error loading dashboard:', err);
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -75,6 +78,15 @@ export default function DashboardPage() {
   return (
     <div className="dashboard-page">
       <h1 className="dashboard-welcome">Welcome back</h1>
+
+      {loadError && (
+        <p className="dashboard-error" role="alert">
+          Couldn't load the latest figures.{' '}
+          <button className="dashboard-retry" onClick={loadDashboard}>
+            Try again
+          </button>
+        </p>
+      )}
 
       <div className="dashboard-stats-grid">
         <StatTile

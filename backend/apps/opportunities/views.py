@@ -52,10 +52,15 @@ class OpportunityFilter(filters.FilterSet):
     band = filters.CharFilter(field_name='band')
     search = filters.CharFilter(method='filter_search')
     posted = filters.ChoiceFilter(choices=POSTED_CHOICES, method='filter_posted')
+    actionable = filters.BooleanFilter(method='filter_actionable')
 
     class Meta:
         model = Opportunity
-        fields = ['service', 'status', 'intent', 'owner', 'band', 'posted']
+        fields = ['service', 'status', 'intent', 'owner', 'band', 'posted', 'actionable']
+
+    def filter_actionable(self, queryset, name, value):
+        """actionable=true hides rejected and closed leads; false/absent leaves the list unchanged."""
+        return queryset.exclude(status__in=['rejected', 'closed']) if value else queryset
 
     def filter_posted(self, queryset, name, value):
         queryset = with_posted_at(queryset)

@@ -50,7 +50,9 @@ export default function OpportunityQueuePage() {
     setLoading(true);
     const params: Record<string, string> = { ordering: '-score' };
     if (filters.intent) params.intent = filters.intent;
-    if (filters.status) params.status = filters.status;
+    // By default hide rejected/closed leads so the queue is what sales can act on.
+    if (filters.status && filters.status !== 'all') params.status = filters.status;
+    else if (!filters.status) params.actionable = 'true';
     if (filters.band) params.band = filters.band;
     if (filters.posted) params.posted = filters.posted;
 
@@ -103,7 +105,8 @@ export default function OpportunityQueuePage() {
           <div className="queue-filter-field">
             <label>Status</label>
             <select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}>
-              <option value="">All</option>
+              <option value="">Active (hides rejected)</option>
+              <option value="all">All, including rejected</option>
               <option value="new">New</option>
               <option value="review">Review</option>
               <option value="contacted">Contacted</option>
