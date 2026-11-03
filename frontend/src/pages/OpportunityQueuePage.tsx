@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import apiClient from '../api/apiClient';
 import PageHeader from '../components/PageHeader';
+import { POSTED_OPTIONS, formatPosted, isPostedWindow } from '../utils/posted';
 import './OpportunityQueuePage.css';
 
 interface Opportunity {
@@ -14,6 +15,7 @@ interface Opportunity {
   primary_category?: string;
   source_name?: string;
   source_published_at?: string;
+  detected_at?: string;
 }
 
 const BAND_COLOR_VARS: Record<string, string> = {
@@ -28,7 +30,7 @@ const EMPTY_FILTERS = {
   status: '',
   band: '',
   minScore: 0,
-  datePreset: 'any',
+  posted: '',
 };
 
 export default function OpportunityQueuePage() {
@@ -36,7 +38,12 @@ export default function OpportunityQueuePage() {
   const [nextUrl, setNextUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const [searchParams] = useSearchParams();
+  const initialPosted = searchParams.get('posted');
+  const [filters, setFilters] = useState({
+    ...EMPTY_FILTERS,
+    posted: isPostedWindow(initialPosted) ? initialPosted : '',
+  });
   const navigate = useNavigate();
 
   const fetchOpportunities = useCallback(() => {
@@ -45,6 +52,7 @@ export default function OpportunityQueuePage() {
     if (filters.intent) params.intent = filters.intent;
     if (filters.status) params.status = filters.status;
     if (filters.band) params.band = filters.band;
+    if (filters.posted) params.posted = filters.posted;
 
     apiClient
       .get('/opportunities/', { params })
@@ -54,7 +62,7 @@ export default function OpportunityQueuePage() {
       })
       .catch((err) => console.log('Error fetching opportunities:', err))
       .finally(() => setLoading(false));
-  }, [filters.intent, filters.status, filters.band]);
+  }, [filters.intent, filters.status, filters.band, filters.posted]);
 
   useEffect(() => {
     fetchOpportunities();
@@ -74,14 +82,7 @@ export default function OpportunityQueuePage() {
   }
 
   const displayed = rawOpportunities.filter((o) => {
-    if (filters.minScore > 0 && o.score < filters.minScore) return false;
-    if (filters.datePreset !== 'any') {
-      const days = filters.datePreset === '24h' ? 1 : filters.datePreset === '7d' ? 7 : 30;
-      const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
-      const published = o.source_published_at ? new Date(o.source_published_at).getTime() : 0;
-      if (published < cutoff) return false;
-    }
-    return true;
+    return !(filters.minScore > 0 && o.score < filters.minScore);
   });
 
   return (
@@ -131,12 +132,13 @@ export default function OpportunityQueuePage() {
             />
           </div>
           <div className="queue-filter-field">
-            <label>Detected within</label>
-            <select value={filters.datePreset} onChange={(e) => setFilters({ ...filters, datePreset: e.target.value })}>
-              <option value="any">Any time</option>
-              <option value="24h">Last 24 hours</option>
-              <option value="7d">Last 7 days</option>
-              <option value="30d">Last 30 days</option>
+            <label>Posted</label>
+            <select value={filters.posted} onChange={(e) => setFilters({ ...filters, posted: e.target.value })}>
+              {POSTED_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </div>
           <button className="queue-clear-button" onClick={() => setFilters(EMPTY_FILTERS)}>
@@ -160,7 +162,11 @@ export default function OpportunityQueuePage() {
                   >
                     {item.band}
                   </span>
-                  <span className="queue-card-score">Score: {item.score}</span>
+                  <span className="queue-card-score">
+                    Score: {item.score}
+                    {formatPosted(item.source_published_at ?? item.detected_at) &&
+                      ` · Posted ${formatPosted(item.source_published_at ?? item.detected_at).toLowerCase()}`}
+                  </span>
                 </div>
               </div>
             ))}

@@ -16,6 +16,9 @@ SERVICE_CATEGORIES = [
     ('MANAGED_IT', 'Managed IT'),
     ('CLOUD_DEVOPS', 'Cloud / DevOps'),
     ('CYBERSECURITY', 'Cybersecurity'),
+    ('COMPLIANCE_AML', 'AML & compliance'),
+    ('ACCOUNTING_TAX', 'Accounting & tax'),
+    ('GOVERNANCE_AUDIT', 'Governance & audit'),
 ]
 
 INTENT_CHOICES = [

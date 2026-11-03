@@ -1,6 +1,7 @@
 """
-Load the curated search terms for Novu's target leads: people and organisations that
-want a website, or a larger software project, built for them — in Pakistan and abroad.
+Load the search terms for Novu's target leads: people and organisations that want a website or a
+larger software project built, or need AML / compliance, accounting & tax or governance & audit
+services — in Pakistan and abroad.
 
     python manage.py seed_search_terms              # add/refresh the curated terms
     python manage.py seed_search_terms --replace    # also disable every other term on the source
@@ -36,6 +37,49 @@ TERMS = [
     ('Projects — Pakistan', 'PK', f'"looking for a software house" OR "need a software company" Pakistan {NO_JOBS}'),
     ('Projects — Pakistan', 'PK', '"software house chahiye" OR "app banwani hai" OR "software banwana hai"'),
     ('Projects — Pakistan', 'PK', f'"management system" OR "ERP" Pakistan school OR hospital OR "supply chain" "required" OR "RFP" {NO_JOBS}'),
+]
+
+
+# Client-supplied keyword list, kept verbatim by group. Each phrase is searched as an exact phrase, with
+# job-post words excluded so "looking for an outsourced MLRO" does not match recruiters.
+CLIENT_KEYWORDS = {
+    'Accounting & tax services': [
+        'looking for a VAT consultant', 'looking for accounting services', 'looking for financial modelling services',
+        'looking for financial reporting support', 'looking for tax compliance services', 'need a corporate tax consultant',
+        'need a cybersecurity risk assessment', 'need an outsourced CFO', 'need management accounts preparation',
+        'need outsourced bookkeeping', 'need tax filing support',
+    ],
+    'AML & compliance services': [
+        'looking for a compliance retainer', 'looking for AML audit services', 'looking for AML risk assessment services',
+        'looking for an AML gap assessment', 'looking for an AML policy consultant', 'looking for an outsourced compliance officer',
+        'looking for an outsourced MLRO', 'looking for compliance manual preparation', 'looking for KYC policy development',
+        'looking for MLRO services', 'looking for sanctions policy development', 'need a compliance health check',
+        'need a fractional compliance officer', 'need a transaction monitoring policy', 'need an AML compliance program',
+        'need an AML consultant', 'need an enterprise wide risk assessment', 'need an external MLRO',
+        'need an independent AML review', 'need compliance outsourcing services', 'need compliance remediation support',
+        'need KYB policy development',
+    ],
+    'Governance & audit services': [
+        'looking for a corporate governance consultant', 'looking for an enterprise risk management consultant',
+        'looking for audit readiness support', 'looking for operational audit services', 'looking for outsourced internal audit',
+        'looking for SOP development services', 'need a policy development consultant', 'need a process audit',
+        'need an internal audit consultant', 'need an internal controls review', 'need board advisory services',
+    ],
+    'Business systems': ['school management software required'],
+    'Managed IT services': ['recommend an MSP'],
+    'Software partners': ['looking for software development company'],
+    'Development teams': ['need dedicated development team', 'offshore development team'],
+    'Client project requests': [
+        'looking for a developer to build', 'looking for a freelance developer', 'looking for someone to develop my website',
+        'need a django developer to build', 'need a full stack developer for my project', 'need a python developer for my project',
+        'need help building my web application', 'need someone to build my website', 'seeking a developer to build my app',
+    ],
+}
+
+TERMS += [
+    (group, 'WORLD', f'"{phrase}" {NO_JOBS}')
+    for group, phrases in CLIENT_KEYWORDS.items()
+    for phrase in phrases
 ]
 
 

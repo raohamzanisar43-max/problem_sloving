@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../api/apiClient';
+import { formatPosted } from '../utils/posted';
 import './DashboardPage.css';
 
 interface Opportunity {
@@ -9,38 +10,48 @@ interface Opportunity {
   score: number;
   band: string;
   detected_at?: string;
+  source_published_at?: string;
 }
 
 interface DashboardStats {
-  today: number;
+  collected: number;
   hot: number;
   review: number;
   contacted: number;
 }
 
+interface PostedCounts {
+  today: number;
+  week: number;
+  month: number;
+}
+
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState<DashboardStats>({ today: 0, hot: 0, review: 0, contacted: 0 });
+  const [stats, setStats] = useState<DashboardStats>({ collected: 0, hot: 0, review: 0, contacted: 0 });
+  const [posted, setPosted] = useState<PostedCounts>({ today: 0, week: 0, month: 0 });
   const [latest, setLatest] = useState<Opportunity[]>([]);
   const navigate = useNavigate();
 
   const loadDashboard = useCallback(async () => {
     try {
-      const [baseline, hot, review, contacted] = await Promise.all([
+      const [baseline, summary, hot, review, contacted] = await Promise.all([
         apiClient.get('/opportunities/', { params: { ordering: '-detected_at' } }),
+        apiClient.get('/opportunities/stats/'),
         apiClient.get('/opportunities/', { params: { band: 'Hot' } }),
         apiClient.get('/opportunities/', { params: { status: 'review' } }),
         apiClient.get('/opportunities/', { params: { status: 'contacted' } }),
       ]);
 
       const results: Opportunity[] = baseline.data.results ?? baseline.data;
-      const todayStr = new Date().toDateString();
-      const todayCount = results.filter(
-        (o) => o.detected_at && new Date(o.detected_at).toDateString() === todayStr
-      ).length;
 
+      setPosted({
+        today: summary.data.posted?.today ?? 0,
+        week: summary.data.posted?.week ?? 0,
+        month: summary.data.posted?.month ?? 0,
+      });
       setStats({
-        today: todayCount,
+        collected: summary.data.collected ?? 0,
         hot: hot.data.count ?? 0,
         review: review.data.count ?? 0,
         contacted: contacted.data.count ?? 0,
@@ -66,7 +77,12 @@ export default function DashboardPage() {
       <h1 className="dashboard-welcome">Welcome back</h1>
 
       <div className="dashboard-stats-grid">
-        <StatTile label="Today's Opportunities" value={stats.today} colorVar="--color-primary" />
+        <StatTile
+          label="Total Collected"
+          value={stats.collected}
+          colorVar="--color-primary"
+          onClick={() => navigate('/opportunities')}
+        />
         <StatTile label="Hot Opportunities" value={stats.hot} colorVar="--color-hot" />
         <StatTile
           label="Under Review"
@@ -75,6 +91,28 @@ export default function DashboardPage() {
           onClick={() => navigate('/review')}
         />
         <StatTile label="Contacted" value={stats.contacted} colorVar="--color-info" />
+      </div>
+
+      <h2 className="dashboard-section-title">Freshness of leads</h2>
+      <div className="dashboard-stats-grid dashboard-freshness-grid">
+        <StatTile
+          label="Posted today"
+          value={posted.today}
+          colorVar="--color-primary"
+          onClick={() => navigate('/opportunities?posted=today')}
+        />
+        <StatTile
+          label="Last 7 days"
+          value={posted.week}
+          colorVar="--color-info"
+          onClick={() => navigate('/opportunities?posted=week')}
+        />
+        <StatTile
+          label="Last 30 days"
+          value={posted.month}
+          colorVar="--color-text-muted"
+          onClick={() => navigate('/opportunities?posted=month')}
+        />
       </div>
 
             <button className="dashboard-primary-button" onClick={() => navigate('/opportunities')}>
@@ -89,6 +127,8 @@ export default function DashboardPage() {
             <p className="dashboard-latest-title">{item.requirement ?? 'Untitled'}</p>
             <p className="dashboard-latest-meta">
               {item.band} · Score {item.score}
+              {formatPosted(item.source_published_at ?? item.detected_at) &&
+                ` · Posted ${formatPosted(item.source_published_at ?? item.detected_at).toLowerCase()}`}
             </p>
           </div>
         ))}

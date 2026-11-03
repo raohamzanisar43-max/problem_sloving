@@ -1,5 +1,9 @@
+from datetime import timedelta
+
 from django.db import transaction
 from django.db.models import Q
+from django.db.models.functions import Coalesce
+from django.utils import timezone
 from rest_framework import viewsets, status, mixins
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -18,6 +22,28 @@ from .serializers import (
 )
 
 
+POSTED_WINDOW_DAYS = {'week': 7, 'month': 30}
+POSTED_CHOICES = [
+    ('today', 'Today'),
+    ('week', 'Last 7 days'),
+    ('month', 'Last 30 days'),
+    ('older', 'Older than 30 days'),
+]
+
+
+def posted_cutoff(bucket):
+    """Start of a posted-date window, in the project time zone ('today' = since local midnight)."""
+    now = timezone.localtime()
+    if bucket == 'today':
+        return now.replace(hour=0, minute=0, second=0, microsecond=0)
+    return now - timedelta(days=POSTED_WINDOW_DAYS[bucket])
+
+
+def with_posted_at(queryset):
+    """The date a post counts from: when the source published it, else when we detected it."""
+    return queryset.annotate(posted_at=Coalesce('source_published_at', 'detected_at'))
+
+
 class OpportunityFilter(filters.FilterSet):
     service = filters.CharFilter(field_name='primary_category')
     status = filters.CharFilter(field_name='status')
@@ -25,10 +51,17 @@ class OpportunityFilter(filters.FilterSet):
     owner = filters.NumberFilter(field_name='owner_id')
     band = filters.CharFilter(field_name='band')
     search = filters.CharFilter(method='filter_search')
+    posted = filters.ChoiceFilter(choices=POSTED_CHOICES, method='filter_posted')
 
     class Meta:
         model = Opportunity
-        fields = ['service', 'status', 'intent', 'owner', 'band']
+        fields = ['service', 'status', 'intent', 'owner', 'band', 'posted']
+
+    def filter_posted(self, queryset, name, value):
+        queryset = with_posted_at(queryset)
+        if value == 'older':
+            return queryset.filter(posted_at__lt=posted_cutoff('month'))
+        return queryset.filter(posted_at__gte=posted_cutoff(value))
 
     def filter_search(self, queryset, name, value):
         if not value:
@@ -127,11 +160,19 @@ class OpportunityViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='stats')
     def stats(self, request):
         qs = self.get_queryset()
+        # Recency counts cover actionable leads only; rejected and closed ones are noise here.
+        live = with_posted_at(qs.exclude(status__in=['rejected', 'closed']))
         return Response({
             'collected': qs.count(),
             'explicit_buyers': qs.filter(intent='buyer').exclude(status__in=['rejected', 'closed']).count(),
             'awaiting_review': qs.filter(status='review').count(),
             'published_email': qs.exclude(email='').count(),
+            'posted': {
+                'today': live.filter(posted_at__gte=posted_cutoff('today')).count(),
+                'week': live.filter(posted_at__gte=posted_cutoff('week')).count(),
+                'month': live.filter(posted_at__gte=posted_cutoff('month')).count(),
+                'older': live.filter(posted_at__lt=posted_cutoff('month')).count(),
+            },
         })
 
     @action(detail=False, methods=['get'], url_path='pipeline')

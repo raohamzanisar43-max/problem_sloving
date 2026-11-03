@@ -148,3 +148,6 @@
     grid-template-columns: repeat(3, 1fr);
   }
 }
+.dashboard-freshness-grid {
+  grid-template-columns: repeat(3, 1fr);
+}

@@ -114,3 +114,30 @@ class ExtractionUnavailableTests(TestCase):
 
         self.assertEqual(Opportunity.objects.count(), 0)
         self.assertEqual(counters['deferred'], 1)
+
+
+class ClientKeywordTests(TestCase):
+    def test_every_client_phrase_is_searched_verbatim_and_exactly(self):
+        from apps.sources.management.commands.seed_search_terms import CLIENT_KEYWORDS
+        queries = {q for _, _, q in TERMS}
+        for phrases in CLIENT_KEYWORDS.values():
+            for phrase in phrases:
+                self.assertTrue(any(q.startswith(f'"{phrase}"') for q in queries), phrase)
+
+    def test_client_groups_are_preserved(self):
+        groups = {g for g, _, _ in TERMS}
+        for name in ('Accounting & tax services', 'AML & compliance services', 'Governance & audit services'):
+            self.assertIn(name, groups)
+
+
+class AdvisoryCategoryTests(TestCase):
+    def test_advisory_categories_count_as_a_service_match(self):
+        from apps.scoring.engine import score_service_match
+        for category in ('COMPLIANCE_AML', 'ACCOUNTING_TAX', 'GOVERNANCE_AUDIT'):
+            self.assertEqual(score_service_match([category]), 25, category)
+
+    def test_prompt_lists_the_advisory_categories(self):
+        from apps.scoring.llm import extraction_system_prompt
+        prompt = extraction_system_prompt()
+        for category in ('COMPLIANCE_AML', 'ACCOUNTING_TAX', 'GOVERNANCE_AUDIT'):
+            self.assertIn(category, prompt)

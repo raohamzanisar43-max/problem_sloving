@@ -15,7 +15,7 @@ EXTRACTION_SCHEMA = {
     'requirement': 'str — one sentence summary of the buyer requirement',
     'intent': 'buyer | nonbuyer | uncertain',
     'kind': 'direct_purchase | rfp | agency_staffing | hiring_signal | indirect_pain | seller_promotion | other',
-    'primary_category': 'ERP | CRM | LMS | MOBILE_APP | WEBSITE | CUSTOM_DEV | AI_AUTOMATION | STAFF_AUGMENTATION | MANAGED_IT | CLOUD_DEVOPS | CYBERSECURITY | (leave blank if none)',
+    'primary_category': 'ERP | CRM | LMS | MOBILE_APP | WEBSITE | CUSTOM_DEV | AI_AUTOMATION | STAFF_AUGMENTATION | MANAGED_IT | CLOUD_DEVOPS | CYBERSECURITY | COMPLIANCE_AML | ACCOUNTING_TAX | GOVERNANCE_AUDIT | (leave blank if none)',
     'categories': 'list of matching categories from above',
     'technology': 'list of technologies mentioned',
     'company_name': 'str or blank',
@@ -33,7 +33,9 @@ EXTRACTION_SCHEMA = {
 
 EXTRACTION_GUIDANCE = (
     'Novu Labs sells websites, e-commerce sites, web applications, mobile apps, ERP/CRM/LMS systems, '
-    'AI and automation, and other custom software projects. Judge the text as a sales researcher looking '
+    'AI and automation, and other custom software projects, plus advisory services: AML and compliance '
+    '(MLRO, AML audits and policies, KYC/KYB, sanctions), accounting and tax (VAT, corporate tax, bookkeeping, '
+    'outsourced CFO, financial reporting) and governance and audit (internal audit, risk, controls, SOPs). Judge the text as a sales researcher looking '
     'for BUYERS who want to commission such a project. '
     'Use intent=buyer with kind=direct_purchase (or rfp for a formal tender/proposal request) only when the '
     'author or organisation is seeking to have a website or software project built or bought. '
@@ -46,10 +48,11 @@ EXTRACTION_GUIDANCE = (
     'samples or "examples" that show how to write a request rather than make one. '
     'A genuine buyer is a specific person or organisation, named or identifiable, who describes a concrete '
     'need and asks for proposals, bids or help - for example a tender notice, a published RFP, or a '
-    'forum or social post asking for someone to build something. The input starts with the page title and '
+    'forum or social post asking for someone to build something or provide a service. The input starts with the page title and '
     'URL; use them as evidence of what kind of page this is. '
-    'Use primary_category WEBSITE for website, redesign or e-commerce needs, and the matching category for '
-    'larger projects. Give the buyer country when stated, and keep confidence low when the text is vague.'
+    'Use primary_category WEBSITE for website, redesign or e-commerce needs, COMPLIANCE_AML, ACCOUNTING_TAX or '
+    'GOVERNANCE_AUDIT for those advisory needs, and the matching category for larger projects. '
+    'Give the buyer country when stated, and keep confidence low when the text is vague.'
 )
 
 
