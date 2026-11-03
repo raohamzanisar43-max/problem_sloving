@@ -40,8 +40,9 @@ TERMS = [
 ]
 
 
-# Client-supplied keyword list, kept verbatim by group. Each phrase is searched as an exact phrase, with
-# job-post words excluded so "looking for an outsourced MLRO" does not match recruiters.
+# Client-supplied keyword list, kept verbatim by group. Brave returns almost nothing for these as quoted
+# exact phrases (0-4 results), so they are searched as plain keywords; the extraction step decides who is
+# a real buyer. Job-post words are excluded so "looking for an outsourced MLRO" does not match recruiters.
 CLIENT_KEYWORDS = {
     'Accounting & tax services': [
         'looking for a VAT consultant', 'looking for accounting services', 'looking for financial modelling services',
@@ -77,7 +78,7 @@ CLIENT_KEYWORDS = {
 }
 
 TERMS += [
-    (group, 'WORLD', f'"{phrase}" {NO_JOBS}')
+    (group, 'WORLD', f'{phrase} {NO_JOBS}')
     for group, phrases in CLIENT_KEYWORDS.items()
     for phrase in phrases
 ]

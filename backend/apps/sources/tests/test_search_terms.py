@@ -117,12 +117,13 @@ class ExtractionUnavailableTests(TestCase):
 
 
 class ClientKeywordTests(TestCase):
-    def test_every_client_phrase_is_searched_verbatim_and_exactly(self):
+    def test_every_client_phrase_is_searched_verbatim_as_keywords(self):
         from apps.sources.management.commands.seed_search_terms import CLIENT_KEYWORDS
         queries = {q for _, _, q in TERMS}
         for phrases in CLIENT_KEYWORDS.values():
             for phrase in phrases:
-                self.assertTrue(any(q.startswith(f'"{phrase}"') for q in queries), phrase)
+                # Unquoted: Brave returns almost nothing for these as exact phrases.
+                self.assertTrue(any(q.startswith(f'{phrase} -jobs') for q in queries), phrase)
 
     def test_client_groups_are_preserved(self):
         groups = {g for g, _, _ in TERMS}
