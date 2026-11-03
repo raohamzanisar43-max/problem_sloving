@@ -12,6 +12,7 @@ from collections import Counter
 
 from celery import shared_task
 from django.db import transaction
+from django.db.models import F
 from django.utils import timezone
 
 from apps.core.operating_settings import get_setting
@@ -234,7 +235,8 @@ def collect_source(self, source_id, run_id=None):
     unprocessed = Observation.objects.filter(
         source=source,
         linked_opportunities__isnull=True,
-    ).order_by('-fetched_at')[:200]
+    # Freshest posts first: when the model quota runs short, today's leads matter more than last month's.
+    ).order_by(F('source_published_at').desc(nulls_last=True), '-fetched_at')[:200]
 
     batch = list(unprocessed)
     qualified = 0

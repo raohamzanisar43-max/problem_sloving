@@ -142,3 +142,30 @@ class AdvisoryCategoryTests(TestCase):
         prompt = extraction_system_prompt()
         for category in ('COMPLIANCE_AML', 'ACCOUNTING_TAX', 'GOVERNANCE_AUDIT'):
             self.assertIn(category, prompt)
+
+
+class ScoringOrderTests(TestCase):
+    def test_freshest_posts_are_scored_first(self):
+        from datetime import datetime, timezone as tz
+        from unittest.mock import patch
+        from apps.observations.models import Observation
+        from apps.sources.tasks import collect_source
+
+        source = Source.objects.create(name='Web', connector_type='web_search', enabled=True)
+        for ext, day in (('old', 1), ('new', 20), ('mid', 10)):
+            Observation.objects.create(
+                source=source, external_id=ext, title=f'Need a website {ext}', text='We need a website built.',
+                original_url=f'https://example.org/{ext}', source_published_at=datetime(2026, 10, day, tzinfo=tz.utc),
+            )
+        seen = []
+
+        class Recorder:
+            def extract(self, text):
+                seen.append(text)
+                return {'intent': 'nonbuyer', 'kind': 'other', 'confidence': 1.0}
+
+        with patch('apps.sources.tasks._import_collector') as imp, patch('apps.scoring.llm.LLMClient', return_value=Recorder()):
+            imp.return_value = lambda src: type('C', (), {'run': lambda self, run, terms: (0, 0, 0, [])})()
+            collect_source(str(source.id))
+
+        self.assertEqual([t.split('\n')[0] for t in seen], ['Title: Need a website new', 'Title: Need a website mid', 'Title: Need a website old'])
