@@ -70,6 +70,15 @@ REGISTRY = {
         'unit': 'days',
         'default': lambda: _radar('EXCERPT_RETENTION_DAYS', 90),
     },
+    'ignore_keywords': {
+        'label': 'Ignore words',
+        'description': 'Comma-separated. Any post whose title, text or URL contains one of these is rejected before scoring.',
+        'type': 'str',
+        'editable': True,
+        'default': lambda: ', '.join(__import__(
+            'apps.sources.content_filters', fromlist=['DEFAULT_IGNORE_KEYWORDS']
+        ).DEFAULT_IGNORE_KEYWORDS),
+    },
     'report_timezone': {
         'label': 'Report timezone',
         'description': 'All events are stored in UTC and displayed in this timezone.',

@@ -76,8 +76,21 @@ def _extract_and_score(observation, source, llm):
     from apps.exports.outbox import emit_for_opportunity
     from apps.opportunities.models import Opportunity, OpportunityObservation
     from apps.scoring.engine import compute_score
+    from apps.sources.content_filters import lead_rejection_reason
 
-    if is_content_page(observation):
+    # Strict client-request filter (see content_filters.lead_rejection_reason):
+    # rejected before scoring, without spending a model call.
+    # A lead a person captured by hand is never filtered out.
+    rejection = None if source.connector_type == 'manual' else lead_rejection_reason(
+        title=observation.title, text=observation.text, url=observation.original_url,
+    )
+    if rejection:
+        fields = {
+            'requirement': (observation.title or observation.text[:120]),
+            'intent': 'nonbuyer', 'kind': 'seller_promotion',
+            'categories': [], 'confidence': 1.0,
+        }
+    elif is_content_page(observation):
         fields = {
             'requirement': observation.title, 'intent': 'nonbuyer', 'kind': 'other',
             'categories': [], 'confidence': 1.0,
@@ -102,6 +115,8 @@ def _extract_and_score(observation, source, llm):
     threshold = float(get_setting('qualification_confidence'))
     status = score_result.get('status_override') or 'new'
     review_reasons = list(score_result['review_reasons'])
+    if rejection:
+        review_reasons.insert(0, f'Filtered out: {rejection}')
 
     # A low-confidence extraction never lands straight in the sales queue.
     if status == 'new' and confidence < threshold:
