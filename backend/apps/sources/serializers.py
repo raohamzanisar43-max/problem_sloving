@@ -20,6 +20,34 @@ class SearchTermSerializer(serializers.ModelSerializer):
             'enabled', 'schedule_minutes', 'created_at',
         )
         read_only_fields = ('id', 'created_at')
+        extra_kwargs = {
+            'group_name': {'required': False},
+            'source': {'required': False},
+        }
+
+    def validate_query(self, value):
+        value = ' '.join((value or '').split())
+        if not value:
+            raise serializers.ValidationError('Keyword cannot be empty.')
+        if len(value) > 200:
+            raise serializers.ValidationError('Keyword must be 200 characters or fewer.')
+        return value
+
+    def validate(self, attrs):
+        if self.instance is None and 'source' not in attrs:
+            # New keywords go to the web-search collector by default.
+            attrs['source'] = (
+                Source.objects.filter(connector_type='web_search', enabled=True).first()
+                or Source.objects.filter(connector_type='web_search').first()
+            )
+        query = attrs.get('query', getattr(self.instance, 'query', ''))
+        source = attrs.get('source', getattr(self.instance, 'source', None))
+        clash = SearchTerm.objects.filter(source=source, query__iexact=query)
+        if self.instance is not None:
+            clash = clash.exclude(pk=self.instance.pk)
+        if clash.exists():
+            raise serializers.ValidationError({'query': 'This keyword already exists.'})
+        return attrs
 
 
 class RunSerializer(serializers.ModelSerializer):

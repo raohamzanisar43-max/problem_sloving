@@ -116,7 +116,9 @@ def _extract_and_score(observation, source, llm):
     status = score_result.get('status_override') or 'new'
     review_reasons = list(score_result['review_reasons'])
     if rejection:
-        review_reasons.insert(0, f'Filtered out: {rejection}')
+        # Distinct prefix from REFILTER_PREFIX: these were never extracted by the
+        # model, so they must not be "restored" when an ignore word is removed.
+        review_reasons.insert(0, f'Filtered out at collection: {rejection}')
 
     # A low-confidence extraction never lands straight in the sales queue.
     if status == 'new' and confidence < threshold:
