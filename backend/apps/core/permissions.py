@@ -14,6 +14,13 @@ class IsSalesManagerOrAdmin(BasePermission):
         )
 
 
+class IsManagerOrSuperuser(BasePermission):
+    """Admin or sales-manager role, or a Django superuser whatever their role."""
+    def has_permission(self, request, view):
+        user = request.user
+        return bool(user and user.is_authenticated and getattr(user, 'is_manager_role', False))
+
+
 class IsSalesStaff(BasePermission):
     """Any authenticated sales role (executive, manager, admin)."""
     def has_permission(self, request, view):

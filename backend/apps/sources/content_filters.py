@@ -361,3 +361,72 @@ def lead_rejection_reason(*, title='', text='', url='', ignore_keywords=None):
     if not is_marketplace_project and not _CLIENT_REQUEST_RE.search(haystack):
         return 'No client request for a developer or software'
     return None
+
+
+# ── Re-applying the filter to leads already in the database ──────────────────
+# Leads hidden by a re-check carry this prefix in review_reasons, so that when
+# an ignore word is later removed they can be put back in the review queue.
+REFILTER_PREFIX = 'Filtered out: '
+
+
+def refilter_existing_leads(*, dry_run=False, log=None):
+    """
+    Re-check existing leads against the current filter and ignore words.
+
+    - new/review leads that now fail the filter are moved to `rejected`;
+    - leads previously hidden by a re-check that now pass are restored to
+      `review` (so removing an ignore word brings its leads back).
+
+    Leads a person captured by hand are never touched. Returns
+    ``{'rejected': n, 'restored': n, 'kept': n}``.
+    """
+    from apps.opportunities.models import Opportunity
+
+    keywords = get_ignore_keywords()
+    counts = {'rejected': 0, 'restored': 0, 'kept': 0}
+
+    candidates = Opportunity.objects.filter(status__in=['new', 'review', 'rejected'])
+    for opp in candidates.iterator():
+        reasons = list(opp.review_reasons or [])
+        hidden_by_refilter = bool(reasons) and str(reasons[0]).startswith(REFILTER_PREFIX)
+        if opp.status == 'rejected' and not hidden_by_refilter:
+            continue  # rejected by a person or by scoring: leave alone
+
+        link = opp.linked_observations.select_related('observation__source').first()
+        obs = link.observation if link else None
+        if obs is not None and obs.source and obs.source.connector_type == 'manual':
+            counts['kept'] += 1
+            continue
+
+        reason = lead_rejection_reason(
+            title=obs.title if obs else opp.requirement,
+            text=obs.text if obs else opp.text,
+            url=opp.source_url,
+            ignore_keywords=keywords,
+        )
+
+        if opp.status == 'rejected':
+            if reason:
+                continue
+            counts['restored'] += 1
+            if log:
+                log(f'  restore: {opp.requirement[:70]!r}')
+            if not dry_run:
+                opp.status = 'review'
+                opp.review_reasons = reasons[1:]
+                opp.revision += 1
+                opp.save(update_fields=['status', 'review_reasons', 'revision', 'updated_at'])
+            continue
+
+        if not reason:
+            counts['kept'] += 1
+            continue
+        counts['rejected'] += 1
+        if log:
+            log(f'  reject: {opp.requirement[:70]!r} -> {reason}')
+        if not dry_run:
+            opp.status = 'rejected'
+            opp.review_reasons = [f'{REFILTER_PREFIX}{reason}'] + reasons
+            opp.revision += 1
+            opp.save(update_fields=['status', 'review_reasons', 'revision', 'updated_at'])
+    return counts

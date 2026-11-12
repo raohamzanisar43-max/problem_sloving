@@ -51,7 +51,8 @@ def _extract_and_score(observation, source, llm):
     # developer" as buyer language even when the author is the one selling,
     # so this deterministic check is a cheaper and more reliable net than an
     # LLM classification call alone (see content_filters.py).
-    rejection = lead_rejection_reason(
+    # A lead a person captured by hand is never filtered out.
+    rejection = None if source.connector_type == 'manual' else lead_rejection_reason(
         title=observation.title, text=observation.text, url=observation.original_url,
     )
     if rejection:
@@ -94,7 +95,9 @@ def _extract_and_score(observation, source, llm):
     status = score_result.get('status_override') or 'new'
     review_reasons = list(score_result['review_reasons'])
     if rejection:
-        review_reasons.insert(0, f'Filtered out: {rejection}')
+        # Distinct prefix from REFILTER_PREFIX: these were never extracted by the
+        # model, so they must not be "restored" when an ignore word is removed.
+        review_reasons.insert(0, f'Filtered out at collection: {rejection}')
 
     # A low-confidence extraction never lands straight in the sales queue.
     if status == 'new' and confidence < threshold:
