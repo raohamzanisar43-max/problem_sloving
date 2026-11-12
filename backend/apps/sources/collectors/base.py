@@ -5,6 +5,8 @@ import hashlib
 import logging
 from abc import ABC, abstractmethod
 
+import httpx
+
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
@@ -96,6 +98,25 @@ class BaseCollector(ABC):
         for term in terms:
             try:
                 rows = self.fetch_observations(term.query, term.market)
+            except httpx.HTTPStatusError as exc:
+                status = exc.response.status_code
+                # Brave answers 422 SUBSCRIPTION_TOKEN_INVALID for a bad key.
+                if status in (401, 402, 403, 422):
+                    # Bad key / exhausted credits fail identically for every
+                    # term, so stop instead of repeating the same error.
+                    logger.error(
+                        '%s: API rejected request (HTTP %s) - check API key/credits. '
+                        'Skipping remaining terms.', self.source.name, status,
+                    )
+                    errors.append(f'HTTP {status}: API key rejected or credits exhausted')
+                    break
+                logger.warning('Collector HTTP %s for term %s', status, term.query)
+                errors.append(str(exc)[:200])
+                continue
+            except httpx.TransportError as exc:
+                logger.warning('Network error for term %s: %s (check internet)', term.query, exc)
+                errors.append(str(exc)[:200])
+                continue
             except Exception as exc:
                 # One failing query must not abandon the remaining terms.
                 logger.exception('Collector error for term %s: %s', term.query, exc)

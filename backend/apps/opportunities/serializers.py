@@ -13,8 +13,7 @@ class OpportunityListSerializer(serializers.ModelSerializer):
             'id', 'public_id', 'requirement', 'primary_category', 'categories',
             'score', 'band', 'status', 'owner', 'owner_name', 'email',
             'source_published_at', 'detected_at', 'source_url', 'source_name',
-            'review_reasons', 'intent', 'confidence',
-        )
+'review_reasons', 'intent', 'kind', 'confidence',        )
 
     def get_owner_name(self, obj):
         if obj.owner:

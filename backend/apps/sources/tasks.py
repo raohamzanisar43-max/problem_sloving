@@ -44,8 +44,37 @@ def _extract_and_score(observation, source, llm):
     from apps.exports.outbox import emit_for_opportunity
     from apps.opportunities.models import Opportunity, OpportunityObservation
     from apps.scoring.engine import compute_score
+    from apps.sources.content_filters import lead_rejection_reason
 
-    fields = llm.extract(observation.text) or {}
+    # Agency/vendor marketing guides are rejected before scoring, without
+    # spending an LLM call: the model reliably reads "how to find a
+    # developer" as buyer language even when the author is the one selling,
+    # so this deterministic check is a cheaper and more reliable net than an
+    # LLM classification call alone (see content_filters.py).
+    rejection = lead_rejection_reason(
+        title=observation.title, text=observation.text, url=observation.original_url,
+    )
+    if rejection:
+        fields = {
+            'requirement': (observation.title or observation.text[:120]),
+            'intent': 'nonbuyer',
+            'kind': 'seller_promotion',
+            'primary_category': '',
+            'categories': [],
+            'technology': [],
+            'company_name': '',
+            'company_domain': '',
+            'country': '',
+            'industry': '',
+            'budget_text': '',
+            'deadline': None,
+            'email': '',
+            'phone': '',
+            'contact_name': '',
+            'confidence': 1.0,
+        }
+    else:
+        fields = llm.extract(observation.text) or {}
 
     score_result = compute_score(
         intent=fields.get('intent', 'uncertain'),
@@ -64,6 +93,8 @@ def _extract_and_score(observation, source, llm):
     threshold = float(get_setting('qualification_confidence'))
     status = score_result.get('status_override') or 'new'
     review_reasons = list(score_result['review_reasons'])
+    if rejection:
+        review_reasons.insert(0, f'Filtered out: {rejection}')
 
     # A low-confidence extraction never lands straight in the sales queue.
     if status == 'new' and confidence < threshold:

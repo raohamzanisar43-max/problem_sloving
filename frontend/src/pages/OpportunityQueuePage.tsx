@@ -10,11 +10,22 @@ interface Opportunity {
   score: number;
   band: string;
   intent?: string;
+  kind?: string;
   status?: string;
   primary_category?: string;
   source_name?: string;
   source_published_at?: string;
 }
+
+const KIND_LABELS: Record<string, string> = {
+  direct_purchase: 'Direct project request',
+  rfp: 'RFP / tender',
+  agency_staffing: 'Agency / staffing request',
+  hiring_signal: 'Hiring signal (employment)',
+  indirect_pain: 'Indirect pain point',
+  seller_promotion: 'Seller promotion (agency content)',
+  other: 'Other',
+};
 
 const BAND_COLOR_VARS: Record<string, string> = {
   Hot: '--color-band-hot',
@@ -25,6 +36,7 @@ const BAND_COLOR_VARS: Record<string, string> = {
 
 const EMPTY_FILTERS = {
   intent: '',
+  kind: '',
   status: '',
   band: '',
   minScore: 0,
@@ -43,8 +55,13 @@ export default function OpportunityQueuePage() {
     setLoading(true);
     const params: Record<string, string> = { ordering: '-score' };
     if (filters.intent) params.intent = filters.intent;
+    if (filters.kind) params.kind = filters.kind;
     if (filters.status) params.status = filters.status;
     if (filters.band) params.band = filters.band;
+    // Evaluated by the backend against the whole table — a "last 24 hours"
+    // lead that scores low still has to show up, not just whatever already
+    // landed on the current -score-ordered page.
+    if (filters.datePreset !== 'any') params.since = filters.datePreset;
 
     apiClient
       .get('/opportunities/', { params })
@@ -54,7 +71,7 @@ export default function OpportunityQueuePage() {
       })
       .catch((err) => console.log('Error fetching opportunities:', err))
       .finally(() => setLoading(false));
-  }, [filters.intent, filters.status, filters.band]);
+  }, [filters.intent, filters.kind, filters.status, filters.band, filters.datePreset]);
 
   useEffect(() => {
     fetchOpportunities();
@@ -73,14 +90,13 @@ export default function OpportunityQueuePage() {
       .finally(() => setLoadingMore(false));
   }
 
+  // `since` and `kind`/`intent`/`status`/`band` are all filtered server-side
+  // now (see fetchOpportunities) so they apply to the whole table, not just
+  // whatever page happened to load. minScore is the one filter still worth
+  // doing client-side — it only trims the current page, which is fine since
+  // results already arrive ordered by score.
   const displayed = rawOpportunities.filter((o) => {
     if (filters.minScore > 0 && o.score < filters.minScore) return false;
-    if (filters.datePreset !== 'any') {
-      const days = filters.datePreset === '24h' ? 1 : filters.datePreset === '7d' ? 7 : 30;
-      const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
-      const published = o.source_published_at ? new Date(o.source_published_at).getTime() : 0;
-      if (published < cutoff) return false;
-    }
     return true;
   });
 
@@ -94,9 +110,17 @@ export default function OpportunityQueuePage() {
             <select value={filters.intent} onChange={(e) => setFilters({ ...filters, intent: e.target.value })}>
               <option value="">All</option>
               <option value="buyer">Buyer</option>
-              <option value="hiring">Hiring</option>
               <option value="nonbuyer">Non-buyer</option>
               <option value="uncertain">Uncertain</option>
+            </select>
+          </div>
+          <div className="queue-filter-field">
+            <label>Kind</label>
+            <select value={filters.kind} onChange={(e) => setFilters({ ...filters, kind: e.target.value })}>
+              <option value="">All</option>
+              {Object.entries(KIND_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
             </select>
           </div>
           <div className="queue-filter-field">

@@ -1,5 +1,8 @@
+from datetime import timedelta
+
 from django.db import transaction
 from django.db.models import Q
+from django.utils import timezone
 from rest_framework import viewsets, status, mixins
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -18,17 +21,26 @@ from .serializers import (
 )
 
 
+_SINCE_WINDOWS = {'24h': timedelta(hours=24), '7d': timedelta(days=7), '30d': timedelta(days=30)}
+
+
 class OpportunityFilter(filters.FilterSet):
     service = filters.CharFilter(field_name='primary_category')
     status = filters.CharFilter(field_name='status')
     intent = filters.CharFilter(field_name='intent')
+    kind = filters.CharFilter(field_name='kind')
     owner = filters.NumberFilter(field_name='owner_id')
     band = filters.CharFilter(field_name='band')
     search = filters.CharFilter(method='filter_search')
+    # "Only the latest N" window, evaluated by the DB against the full table —
+    # not a client-side filter over whatever page happened to load, which
+    # silently hides recent leads that didn't also score high enough to be
+    # on the first page. ?since=24h / 7d / 30d.
+    since = filters.CharFilter(method='filter_since')
 
     class Meta:
         model = Opportunity
-        fields = ['service', 'status', 'intent', 'owner', 'band']
+        fields = ['service', 'status', 'intent', 'kind', 'owner', 'band']
 
     def filter_search(self, queryset, name, value):
         if not value:
@@ -36,6 +48,12 @@ class OpportunityFilter(filters.FilterSet):
         return queryset.filter(
             Q(requirement__icontains=value) | Q(text__icontains=value) | Q(company_name__icontains=value)
         )
+
+    def filter_since(self, queryset, name, value):
+        window = _SINCE_WINDOWS.get(value)
+        if not window:
+            return queryset
+        return queryset.filter(source_published_at__gte=timezone.now() - window)
 
 
 class OpportunityViewSet(viewsets.ModelViewSet):

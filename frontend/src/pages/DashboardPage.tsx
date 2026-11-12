@@ -39,13 +39,18 @@ export default function DashboardPage() {
         (o) => o.detected_at && new Date(o.detected_at).toDateString() === todayStr
       ).length;
 
-      setStats({
+            setStats({
         today: todayCount,
         hot: hot.data.count ?? 0,
         review: review.data.count ?? 0,
         contacted: contacted.data.count ?? 0,
       });
-      setLatest(results.slice(0, 3));
+
+      // "Latest Opportunities" should only show genuinely relevant leads —
+      // Archive-band items are low-score/rejected (junk, seller promotion, etc.)
+      // and would otherwise confuse anyone viewing the dashboard.
+      const relevantResults = results.filter((o) => o.band !== 'Archive');
+      setLatest(relevantResults.slice(0, 3));
     } catch (err) {
       console.log('Error loading dashboard:', err);
     } finally {
