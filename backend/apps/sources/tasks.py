@@ -24,6 +24,7 @@ COLLECTOR_MAP = {
     'reddit': 'apps.sources.collectors.reddit_collector.RedditCollector',
     'rss': 'apps.sources.collectors.rss_collector.RSSCollector',
     'rfp_portal': 'apps.sources.collectors.rss_collector.RSSCollector',
+    'freelancer': 'apps.sources.collectors.freelancer.FreelancerCollector',
 }
 
 
@@ -74,6 +75,12 @@ def _extract_and_score(observation, source, llm):
             'contact_name': '',
             'confidence': 1.0,
         }
+    elif source.connector_type == 'freelancer':
+        # A Freelancer.com project is a client brief with structured budget
+        # and skills, so its fields are read directly rather than guessed by
+        # the model (more accurate, and no LLM call per project).
+        from apps.sources.collectors.freelancer import lead_fields
+        fields = lead_fields(observation)
     else:
         fields = llm.extract(observation.text) or {}
 
@@ -218,10 +225,8 @@ def collect_source(self, source_id, run_id=None):
         run.mark_finished(state='failed', error=message[:500])
         return run.counters
 
-    terms = list(source.search_terms.filter(enabled=True))
-    if not terms:
-        # Use the shared term list when none are attached to this source.
-        terms = list(SearchTerm.objects.filter(enabled=True, source__isnull=True))
+    from apps.sources.content_filters import search_terms_for
+    terms = search_terms_for(source)
 
     fetched, new_count, duplicates, errors = collector.run(run, terms)
     logger.info('Source %s: %d new observations', source.name, new_count)
@@ -258,17 +263,24 @@ def collect_source(self, source_id, run_id=None):
 
 
 @shared_task
-def collect_all_sources():
+def collect_all_sources(only_types=None, exclude_types=None):
     """
-    Scheduled entry point: run every enabled source in turn.
+    Scheduled entry point: run every enabled source in turn (optionally only,
+    or all but, the given connector types — the scheduler runs free sources
+    more often than paid ones).
 
     One failing connector must not stop the others (handover §15), so each
     source is isolated and its failure recorded on its own Run.
     """
     from apps.sources.models import Source
 
+    sources = Source.objects.filter(enabled=True).exclude(connector_type='manual')
+    if only_types:
+        sources = sources.filter(connector_type__in=list(only_types))
+    if exclude_types:
+        sources = sources.exclude(connector_type__in=list(exclude_types))
     results = {}
-    for source in Source.objects.filter(enabled=True).exclude(connector_type='manual'):
+    for source in sources:
         try:
             results[source.name] = collect_source(str(source.id))
         except Exception as exc:

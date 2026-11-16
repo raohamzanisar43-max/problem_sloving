@@ -131,6 +131,98 @@ class OpportunityViewSet(viewsets.ModelViewSet):
         )
         return Response(DraftSerializer(draft).data, status=status.HTTP_201_CREATED)
 
+    # ── Proposal studio ──────────────────────────────────────────────────
+    # Proposals are drafts a person edits and submits on the client's platform
+    # themselves; nothing is sent from here.
+    PROPOSAL_PREFIX = 'proposal:'
+
+    def _proposal_payload(self, opportunity, draft, length, extra=None):
+        from apps.scoring.proposals import score_proposal
+        data = {
+            'id': str(draft.id) if draft else None,
+            'content': draft.content if draft else '',
+            'model': draft.model_version if draft else '',
+            'created_at': draft.created_at if draft else None,
+            'quality': score_proposal(draft.content if draft else '', opportunity, length),
+        }
+        data.update(extra or {})
+        return data
+
+    @action(detail=True, methods=['post'], url_path='proposal')
+    def generate_proposal(self, request, pk=None):
+        from apps.scoring.proposals import generate_proposal
+        opportunity = self.get_object()
+        result = generate_proposal(
+            opportunity,
+            tone=str(request.data.get('tone', 'professional')),
+            length=str(request.data.get('length', 'medium')),
+            instructions=str(request.data.get('instructions', '') or ''),
+        )
+        draft = Draft.objects.create(
+            opportunity=opportunity,
+            content=result['content'],
+            model_version=f"{self.PROPOSAL_PREFIX}{result['tone']}/{result['length']}:{result['model']}"[:64],
+            created_by=request.user,
+        )
+        Activity.objects.create(
+            opportunity=opportunity, actor=request.user, action='proposal_generated',
+            to_value=draft.model_version, payload={'quality': result['quality']['score'], 'ai': result['ai']},
+        )
+        return Response({**result, 'id': str(draft.id), 'created_at': draft.created_at},
+                        status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'], url_path='proposal/score')
+    def score_proposal(self, request, pk=None):
+        from apps.scoring.proposals import score_proposal
+        opportunity = self.get_object()
+        return Response(score_proposal(str(request.data.get('content', '')), opportunity,
+                                       str(request.data.get('length', 'medium'))))
+
+    @action(detail=True, methods=['get'], url_path='proposal/latest')
+    def latest_proposal(self, request, pk=None):
+        opportunity = self.get_object()
+        draft = opportunity.drafts.filter(model_version__startswith=self.PROPOSAL_PREFIX).first()
+        length = 'medium'
+        if draft:
+            setting = draft.model_version[len(self.PROPOSAL_PREFIX):].split(':', 1)[0]
+            length = setting.split('/')[-1] if '/' in setting else 'medium'
+        return Response(self._proposal_payload(opportunity, draft, length, {'length': length}))
+
+    @action(detail=True, methods=['post'], url_path='proposal/save')
+    def save_proposal(self, request, pk=None):
+        """Save the edited proposal; with ``applied: true`` also move the lead to Proposal sent."""
+        from apps.exports.outbox import emit_for_opportunity
+        opportunity = self.get_object()
+        content = str(request.data.get('content', '') or '').strip()
+        if not content:
+            return Response({'detail': 'The proposal is empty.'}, status=status.HTTP_400_BAD_REQUEST)
+        tone = str(request.data.get('tone', 'professional'))[:16]
+        length = str(request.data.get('length', 'medium'))[:16]
+        applied = bool(request.data.get('applied'))
+        with transaction.atomic():
+            draft = Draft.objects.create(
+                opportunity=opportunity, content=content,
+                model_version=f'{self.PROPOSAL_PREFIX}{tone}/{length}:edited'[:64],
+                created_by=request.user,
+            )
+            if applied and opportunity.status != 'proposal':
+                Activity.objects.create(
+                    opportunity=opportunity, actor=request.user, action='status_change',
+                    from_value=opportunity.status, to_value='proposal',
+                    payload={'via': 'proposal_studio'},
+                )
+                opportunity.status = 'proposal'
+                fields = ['status', 'revision', 'updated_at']
+                if opportunity.owner_id is None:
+                    opportunity.owner = request.user
+                    fields.append('owner')
+                opportunity.revision += 1
+                opportunity.save(update_fields=fields)
+                emit_for_opportunity(opportunity, reason='status')
+        payload = self._proposal_payload(opportunity, draft, length, {'length': length})
+        payload['opportunity'] = OpportunityDetailSerializer(opportunity, context={'request': request}).data
+        return Response(payload, status=status.HTTP_201_CREATED)
+
     @action(detail=True, methods=['get'], url_path='draft-list')
     def draft_list(self, request, pk=None):
         opportunity = self.get_object()

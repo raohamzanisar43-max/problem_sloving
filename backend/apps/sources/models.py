@@ -16,6 +16,7 @@ class Source(models.Model):
         ('reddit', 'Reddit Data API'),
         ('linkedin', 'LinkedIn (conditional)'),
         ('manual', 'Manual capture'),
+        ('freelancer', 'Freelancer.com projects'),
     ]
     ACCESS_STATES = [
         ('disabled', 'Disabled'),

@@ -1,0 +1,150 @@
+.proposal-studio {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.proposal-controls {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.proposal-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.proposal-controls select,
+.proposal-instructions,
+.proposal-text {
+  font: inherit;
+  font-size: 14px;
+  color: var(--color-text);
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.proposal-instructions {
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 10px;
+}
+
+.proposal-text {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  line-height: 1.5;
+  min-height: 220px;
+}
+
+.proposal-generate,
+.proposal-primary {
+  background: var(--color-primary);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 9px 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.proposal-generate:hover:not(:disabled),
+.proposal-primary:hover:not(:disabled) {
+  background: var(--color-primary-dark);
+}
+
+.proposal-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.proposal-actions button:not(.proposal-primary) {
+  background: var(--color-primary-light);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 9px 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.proposal-studio button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.proposal-quality {
+  margin-top: 10px;
+  font-size: 13px;
+}
+
+.proposal-score {
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+  color: white;
+  margin-right: 8px;
+}
+
+.proposal-score.good {
+  background: var(--color-band-hot);
+}
+
+.proposal-score.ok {
+  background: var(--color-band-high);
+}
+
+.proposal-score.low {
+  background: var(--color-band-archive);
+}
+
+.proposal-words {
+  color: var(--color-text-muted);
+}
+
+.proposal-quality ul {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+}
+
+.proposal-quality li {
+  padding: 2px 0;
+  color: var(--color-text-muted);
+}
+
+.proposal-quality li.ok {
+  color: var(--color-primary-dark);
+}
+
+.proposal-warning {
+  background: #fff4e5;
+  border: 1px solid #f0c48a;
+  color: #7a4a06;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+.proposal-error {
+  color: var(--color-danger);
+  font-size: 13px;
+}
+
+.proposal-message {
+  color: var(--color-primary-dark);
+  font-size: 13px;
+  margin-top: 8px;
+}

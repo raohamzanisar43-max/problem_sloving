@@ -105,3 +105,87 @@ class IgnoreKeywordsApiTests(TestCase):
         self.client.force_authenticate(executive)
         self.assertEqual(self.client.get('/api/v1/ignore-keywords/').status_code, 200)
         self.assertEqual(self.client.put('/api/v1/ignore-keywords/', {'keywords': []}, format='json').status_code, 403)
+
+
+class BraveDailyLimitTests(TestCase):
+    def test_calls_stop_at_the_daily_limit(self):
+        from django.test import override_settings
+        from django.conf import settings as dj_settings
+        from apps.sources.collectors.base import CallBudgetExceeded
+        from apps.sources.collectors.brave import reserve_daily_call
+
+        radar = {**dj_settings.RADAR, 'BRAVE_DAILY_CALL_LIMIT': 2}
+        with override_settings(RADAR=radar):
+            reserve_daily_call()
+            reserve_daily_call()
+            with self.assertRaises(CallBudgetExceeded):
+                reserve_daily_call()
+
+    def test_collector_stops_without_calling_brave_when_limit_reached(self):
+        from unittest import mock
+        from django.test import override_settings
+        from django.conf import settings as dj_settings
+        from apps.sources.collectors.brave import BraveCollector
+        from apps.sources.models import Run
+
+        source = Source.objects.create(name='Web search', connector_type='web_search', enabled=True)
+        terms = [SearchTerm.objects.create(source=source, group_name='G', query=f'need developer {i}') for i in range(3)]
+        radar = {**dj_settings.RADAR, 'BRAVE_DAILY_CALL_LIMIT': 1, 'BRAVE_API_KEY': 'x'}
+        fake = mock.Mock(status_code=200)
+        fake.json.return_value = {'web': {'results': []}}
+        with override_settings(RADAR=radar), mock.patch('httpx.Client.get', return_value=fake) as get:
+            run = Run.objects.create(source=source, state='queued', trigger='schedule')
+            _, _, _, errors = BraveCollector(source).run(run, terms)
+        self.assertEqual(get.call_count, 1)
+        self.assertEqual(len(errors), 1)
+        self.assertIn('Daily Brave call limit', errors[0])
+
+
+class KeywordRelevanceTests(TestCase):
+    KEYWORDS = ['need a django developer to build', 'need someone to build my website', 'we need a mobile app developer']
+
+    def reason(self, title, text='', url='https://www.reddit.com/r/forhire/comments/x/y/'):
+        from apps.sources.content_filters import lead_rejection_reason
+        return lead_rejection_reason(title=title, text=text, url=url, ignore_keywords=[], search_keywords=self.KEYWORDS)
+
+    def test_posts_matching_a_keyword_are_kept(self):
+        self.assertIsNone(self.reason('Looking for a Django dev to build our booking portal'))
+        self.assertIsNone(self.reason('Need someone to build my site', 'small bakery, budget $300'))
+        self.assertIsNone(self.reason('[Hiring] Mobile apps developer needed', 'We need an iOS and Android app'))
+
+    def test_client_requests_outside_the_keywords_are_rejected(self):
+        self.assertEqual(
+            self.reason('Looking for an outsourced MLRO', 'We need an AML compliance consultant'),
+            'Does not match any search keyword',
+        )
+        self.assertEqual(
+            self.reason('Need a logo designer for my brand'),
+            'Does not match any search keyword',
+        )
+
+    def test_only_active_web_search_keywords_count(self):
+        from apps.sources.content_filters import active_search_keywords
+        web = Source.objects.create(name='Web search', connector_type='web_search', enabled=True)
+        Source.objects.create(name='Manual', connector_type='manual', enabled=True)
+        SearchTerm.objects.create(source=web, group_name='G', query='need a django developer')
+        SearchTerm.objects.create(source=web, group_name='G', query='off keyword', enabled=False)
+        SearchTerm.objects.create(source=None, group_name='Shared', query='aml consultant')
+        self.assertEqual(active_search_keywords(), ['need a django developer'])
+
+
+class KeywordChangeRefilterTests(TestCase):
+    def test_switching_a_keyword_off_hides_its_leads_and_on_restores_them(self):
+        owner = User.objects.create_user(username='o', password='p', role='admin')
+        client = APIClient(); client.force_authenticate(owner)
+        web = Source.objects.create(name='Web search', connector_type='web_search', enabled=True)
+        django_kw = SearchTerm.objects.create(source=web, group_name='G', query='need a django developer')
+        SearchTerm.objects.create(source=web, group_name='G', query='need someone to build my website')
+        lead = make_lead(requirement='Looking for a Django developer', text='We need a Django dev for our portal.')
+
+        client.patch(f'/api/v1/search-terms/{django_kw.id}/', {'enabled': False}, format='json')
+        lead.refresh_from_db()
+        self.assertEqual(lead.status, 'rejected')
+
+        client.patch(f'/api/v1/search-terms/{django_kw.id}/', {'enabled': True}, format='json')
+        lead.refresh_from_db()
+        self.assertEqual(lead.status, 'review')

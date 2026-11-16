@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import apiClient from '../api/apiClient';
 import PageHeader from '../components/PageHeader';
+import ProposalStudio from '../components/ProposalStudio';
 import './LeadDetailPage.css';
 
 interface Opportunity {
@@ -28,6 +29,9 @@ interface Opportunity {
   owner?: string;
   owner_name?: string;
   source_url?: string;
+  source_name?: string;
+  text?: string;
+  technology?: string[];
 }
 
 interface Me {
@@ -166,6 +170,32 @@ export default function LeadDetailPage() {
           </span>
           <span className="badge status-badge">{opp.status}</span>
         </div>
+
+        <h2 className="section-title">Project</h2>
+        {opp.source_name && <InfoRow label="Posted on" value={opp.source_name} />}
+        {opp.budget_text && <InfoRow label="Budget" value={opp.budget_text} />}
+        {opp.technology && opp.technology.length > 0 && (
+          <div className="skill-chips">
+            {opp.technology.map((t) => (
+              <span key={t} className="skill-chip">
+                {t}
+              </span>
+            ))}
+          </div>
+        )}
+        {opp.text && (
+          <details className="project-text" open>
+            <summary>Client's post</summary>
+            <p>{opp.text}</p>
+          </details>
+        )}
+
+        <h2 className="section-title">Proposal</h2>
+        <ProposalStudio
+          opportunityId={opp.id}
+          sourceUrl={opp.source_url}
+          onApplied={(updated) => setOpp(updated as Opportunity)}
+        />
 
         <h2 className="section-title">Score Breakdown</h2>
         {FACTOR_LABELS.map((f, i) => (
