@@ -58,6 +58,22 @@ class SearchTermViewSet(viewsets.ModelViewSet):
         if not serializer.validated_data.get('group_name'):
             extra['group_name'] = CUSTOM_KEYWORD_GROUP
         serializer.save(**extra)
+        self._refilter()
+
+    def perform_update(self, serializer):
+        serializer.save()
+        self._refilter()
+
+    def perform_destroy(self, instance):
+        instance.delete()
+        self._refilter()
+
+    @staticmethod
+    def _refilter():
+        # Leads must match an active keyword, so switching a keyword off hides
+        # the leads that only matched it, and switching it on brings them back.
+        from apps.sources.content_filters import refilter_existing_leads
+        refilter_existing_leads()
 
 
 class IgnoreKeywordsView(APIView):

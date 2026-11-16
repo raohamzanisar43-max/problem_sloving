@@ -12,6 +12,10 @@ from django.utils import timezone
 logger = logging.getLogger(__name__)
 
 
+class CallBudgetExceeded(Exception):
+    """The paid API's daily call limit for this server has been reached."""
+
+
 class BaseCollector(ABC):
     """Abstract base for all source collectors."""
 
@@ -98,6 +102,10 @@ class BaseCollector(ABC):
         for term in terms:
             try:
                 rows = self.fetch_observations(term.query, term.market)
+            except CallBudgetExceeded as exc:
+                logger.warning('%s: %s Skipping remaining terms.', self.source.name, exc)
+                errors.append(str(exc)[:200])
+                break
             except httpx.HTTPStatusError as exc:
                 status = exc.response.status_code
                 # Brave answers 422 SUBSCRIPTION_TOKEN_INVALID for a bad key.

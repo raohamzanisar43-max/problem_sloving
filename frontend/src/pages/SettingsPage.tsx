@@ -204,9 +204,10 @@ export default function SettingsPage() {
           {/* ── Search keywords ── */}
           <p className="settings-section-label">Search keywords</p>
           <p className="settings-help">
-            Posts are searched with these keywords on every scheduled run — write them the way a client
-            would post a job, e.g. <em>need someone to build my website</em>. Each keyword that is ON
-            uses 1 search call per run ({activeCount} ON now).
+            Posts are searched with these keywords on every scheduled run, and only posts that match one
+            of the keywords that are ON become leads. Write them the way a client would post a job, e.g.{' '}
+            <em>need someone to build my website</em> — the important words (here: <em>website</em>) must
+            appear in the post. Each keyword that is ON uses 1 search call per run ({activeCount} ON now).
           </p>
           <div className="settings-card">
             {canManage && (

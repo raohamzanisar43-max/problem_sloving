@@ -181,6 +181,11 @@ RADAR = {
     'LLM_API_KEY': os.getenv('LLM_API_KEY', ''),
     'LLM_MODEL': os.getenv('LLM_MODEL', 'gpt-4o-mini'),
     'BRAVE_API_KEY': os.getenv('BRAVE_API_KEY', ''),
+    # Hard cap on paid Brave Search calls per day (per server/database), so a
+    # short interval or repeated restarts can never drain the prepaid credit.
+    'BRAVE_DAILY_CALL_LIMIT': int(os.getenv('BRAVE_DAILY_CALL_LIMIT', '30') or 30),
+    # Free sources (Freelancer.com) are collected this often by run_scheduler.py.
+    'FREE_SOURCE_INTERVAL_MINUTES': int(os.getenv('FREE_SOURCE_INTERVAL_MINUTES', '60') or 60),
     'X_BEARER_TOKEN': os.getenv('X_BEARER_TOKEN', ''),
     'REDDIT_CLIENT_ID': os.getenv('REDDIT_CLIENT_ID', ''),
     'REDDIT_CLIENT_SECRET': os.getenv('REDDIT_CLIENT_SECRET', ''),

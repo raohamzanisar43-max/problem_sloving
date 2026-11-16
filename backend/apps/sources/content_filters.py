@@ -322,7 +322,107 @@ def get_ignore_keywords():
     return _parse_keywords(raw)
 
 
-def lead_rejection_reason(*, title='', text='', url='', ignore_keywords=None):
+# ── Keyword relevance gate ───────────────────────────────────────────────────
+# A lead must match at least one of the search keywords configured for the
+# collectors (Settings → Search keywords). Each keyword is reduced to its
+# meaningful words ("need a django developer to build" → django, developer);
+# a post matches when all of one keyword's meaningful words appear in its
+# title, text or link. Filler words are ignored and a few common synonyms
+# (dev/programmer → developer, site → website, application → app) count.
+
+_KEYWORD_FILLER = {
+    'a', 'an', 'the', 'to', 'for', 'of', 'and', 'or', 'in', 'on', 'with', 'as', 'at', 'by',
+    'i', 'we', 'me', 'my', 'our', 'us', 'you', 'your', 'is', 'are', 'am', 'be',
+    'need', 'needs', 'needed', 'needing', 'looking', 'look', 'seeking', 'seek', 'searching',
+    'want', 'wanted', 'wants', 'hire', 'hiring', 'hired', 'require', 'required',
+    'someone', 'somebody', 'anyone', 'help', 'build', 'building', 'built', 'develop',
+    'developing', 'create', 'creating', 'make', 'making', 'get', 'now', 'join', 'team',
+    'available', 'position', 'project', 'freelance', 'freelancer', 'experienced',
+    'expert', 'good', 'new', 'please', 'urgent', 'urgently', 'asap',
+}
+
+_SYNONYMS = {
+    'developer': 'developer', 'dev': 'developer', 'programmer': 'developer',
+    'coder': 'developer', 'engineer': 'developer',
+    'website': 'website', 'site': 'website', 'webpage': 'website', 'webiste': 'website',
+    'app': 'app', 'application': 'app',
+    'fullstack': 'fullstack',
+}
+
+
+def _norm_token(word):
+    w = word.lower()
+    if len(w) > 3 and w.endswith('s') and not w.endswith('ss'):
+        w = w[:-1]
+    return _SYNONYMS.get(w, w)
+
+
+def _tokens(text):
+    raw = (text or '').lower().replace('full stack', 'fullstack').replace('full-stack', 'fullstack')
+    raw = raw.replace('web site', 'website').replace('react native', 'reactnative')
+    return {_norm_token(w) for w in re.findall(r'[a-z0-9+#.]+', raw) if w.strip('.')}
+
+
+def keyword_core(query):
+    """The meaningful words of a search keyword, normalised for matching."""
+    return {t for t in _tokens(query) if t not in _KEYWORD_FILLER}
+
+
+def search_terms_for(source):
+    """
+    The SearchTerm rows a source collects with: its own enabled keywords, or
+    the shared list when it has none. Freelancer.com uses the keywords managed
+    on the Settings screen (the web-search source's), so both stay in step.
+    """
+    from apps.sources.models import SearchTerm, Source
+
+    if source.connector_type == 'freelancer':
+        web = Source.objects.filter(connector_type='web_search').order_by('created_at').first()
+        if web is not None:
+            terms = list(web.search_terms.filter(enabled=True))
+            if terms:
+                return terms
+    terms = list(source.search_terms.filter(enabled=True))
+    if not terms:
+        terms = list(SearchTerm.objects.filter(enabled=True, source__isnull=True))
+    return terms
+
+
+def active_search_keywords():
+    """The keywords the enabled (non-manual) collectors actually run."""
+    from apps.sources.models import Source
+
+    queries = []
+    for source in Source.objects.filter(enabled=True).exclude(connector_type='manual'):
+        queries.extend(t.query for t in search_terms_for(source))
+    return list(dict.fromkeys(queries))
+
+
+# On a freelance marketplace every project is someone hiring for software
+# work, so a keyword's "who" words (developer, agency...) are implied there:
+# "need a mobile app developer" matches a project about a mobile app.
+ROLE_WORDS = {'developer', 'software', 'agency', 'company', 'team', 'service', 'programming', 'coding'}
+
+
+def matched_keyword(*, title='', text='', url='', keywords=None, marketplace=False):
+    """
+    The first search keyword the post matches, or None. ``keywords=None`` loads
+    the active keywords; an empty keyword list matches nothing.
+    """
+    keywords = active_search_keywords() if keywords is None else keywords
+    words = _tokens(f'{title} {text} {(url or "").replace("-", " ").replace("_", " ").replace("/", " ")}')
+    for query in keywords:
+        core = keyword_core(query)
+        if not core:
+            continue
+        if marketplace:
+            core = core - ROLE_WORDS
+        if core <= words:
+            return query
+    return None
+
+
+def lead_rejection_reason(*, title='', text='', url='', ignore_keywords=None, search_keywords=None):
     """
     Return a short human-readable reason when the post is NOT a client asking
     for software to be built, or None when it should be kept and scored.
@@ -335,8 +435,12 @@ def lead_rejection_reason(*, title='', text='', url='', ignore_keywords=None):
     is_marketplace_project = bool(_MARKETPLACE_PROJECT_RE.search(url))
 
     # Marketplace project URLs contain words like "freelance-jobs", so only
-    # their title/text is checked against the ignore words.
+    # their title/text is checked against the ignore words. A marketplace
+    # project's description is the client's brief, where words such as
+    # "template", "costs" or "guide" are normal, so only its title is checked.
     url_words = '' if is_marketplace_project else url_l.replace('-', ' ').replace('_', ' ')
+    if is_marketplace_project:
+        haystack = title.lower()
     for kw in keywords:
         pattern = r'(?<!\w)' + re.escape(kw) + r'(?!\w)'
         if re.search(pattern, haystack):
@@ -344,22 +448,32 @@ def lead_rejection_reason(*, title='', text='', url='', ignore_keywords=None):
         if url_words and re.search(pattern, url_words):
             return f'Ignore word in URL: "{kw}"'
 
-    if _HIRE_LANDING_TITLE_RE.search(title):
-        return 'Agency "Hire developers" landing page'
-
+    # A project posted on a freelance marketplace is by definition a client
+    # hiring, so the "is this really a client request?" heuristics below are
+    # for open-web pages only (a client may well title a project "Hire a
+    # Flutter developer").
     if not is_marketplace_project:
+        if _HIRE_LANDING_TITLE_RE.search(title):
+            return 'Agency "Hire developers" landing page'
         if is_known_non_lead_domain(url):
             return 'Job board / directory / marketplace / video site'
         if _AGENCY_DOMAIN_RE.search(_netloc(url)):
             return 'Software agency website (marketing content)'
+        if is_job_description_posting(text):
+            return 'Employee job description, not a client project'
+        if is_agency_marketing_content(title=title, text=text, url=url):
+            return 'Agency guide / marketing article'
+        if not _CLIENT_REQUEST_RE.search(haystack):
+            return 'No client request for a developer or software'
 
-    if is_job_description_posting(text):
-        return 'Employee job description, not a client project'
-    if is_agency_marketing_content(title=title, text=text, url=url):
-        return 'Agency guide / marketing article'
-
-    if not is_marketplace_project and not _CLIENT_REQUEST_RE.search(haystack):
-        return 'No client request for a developer or software'
+    if search_keywords is None:
+        search_keywords = active_search_keywords()
+    # With no keywords configured nothing is collected anyway, so the gate
+    # only applies once at least one keyword exists.
+    if search_keywords and not matched_keyword(
+        title=title, text=text, url=url, keywords=search_keywords, marketplace=is_marketplace_project,
+    ):
+        return 'Does not match any search keyword'
     return None
 
 
@@ -383,6 +497,7 @@ def refilter_existing_leads(*, dry_run=False, log=None):
     from apps.opportunities.models import Opportunity
 
     keywords = get_ignore_keywords()
+    search_keywords = active_search_keywords()
     counts = {'rejected': 0, 'restored': 0, 'kept': 0}
 
     candidates = Opportunity.objects.filter(status__in=['new', 'review', 'rejected'])
@@ -403,6 +518,7 @@ def refilter_existing_leads(*, dry_run=False, log=None):
             text=obs.text if obs else opp.text,
             url=opp.source_url,
             ignore_keywords=keywords,
+            search_keywords=search_keywords,
         )
 
         if opp.status == 'rejected':
