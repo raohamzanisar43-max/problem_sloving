@@ -1,7 +1,11 @@
 import logging
+import threading
+from datetime import timedelta
 
 from django.core.exceptions import ValidationError
+from django.utils import timezone
 from rest_framework import status, viewsets
+from rest_framework.decorators import action
 from rest_framework.views import APIView
 from rest_framework.response import Response
 
@@ -16,12 +20,49 @@ class SourceViewSet(viewsets.ModelViewSet):
     queryset = Source.objects.all()
     serializer_class = SourceSerializer
     ordering = ['name']
-    http_method_names = ['get', 'patch', 'head', 'options']
+    # POST is only for the run-now action; sources are not created over the API.
+    http_method_names = ['get', 'patch', 'post', 'head', 'options']
+
+    def create(self, request, *args, **kwargs):
+        return Response({'detail': 'Sources are not created over the API.'},
+                        status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
     def get_permissions(self):
         if self.action in ('update', 'partial_update', 'destroy', 'create'):
             return [IsAdmin()]
+        if self.action == 'run_now':
+            return [IsSalesManagerOrAdmin()]
         return [IsSalesStaff()]
+
+    @action(detail=True, methods=['post'], url_path='run-now')
+    def run_now(self, request, pk=None):
+        """
+        Collect this source now, in the background (a run can take minutes), so
+        a source switched on or fixed does not wait for its next scheduled slot.
+        """
+        source = self.get_object()
+        if not source.enabled:
+            return Response({'detail': f'"{source.name}" is switched off. Switch it on first.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if Run.objects.filter(source=source, state__in=['queued', 'running'],
+                              created_at__gte=timezone.now() - timedelta(minutes=30)).exists():
+            return Response({'detail': f'"{source.name}" is already collecting. Check back in a few minutes.'},
+                            status=status.HTTP_409_CONFLICT)
+        run = Run.objects.create(source=source, state='queued', trigger='manual')
+
+        def work():
+            from django.db import connection
+            from apps.sources.tasks import collect_source
+            try:
+                collect_source(str(source.id), run_id=str(run.id))
+            except Exception:
+                logger.exception('Manual run of %s failed', source.name)
+            finally:
+                connection.close()
+
+        threading.Thread(target=work, daemon=True).start()
+        return Response({'detail': f'"{source.name}" is collecting now. New leads appear in a few minutes.',
+                         'run_id': str(run.id)}, status=status.HTTP_202_ACCEPTED)
 
 
 CUSTOM_KEYWORD_GROUP = 'Custom keywords'
