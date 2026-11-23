@@ -100,11 +100,10 @@ export default function NotificationsPage() {
       <div className="notif-content">
         {inbox && !inbox.configured && (
           <div className="notif-banner warn">
-            <strong>info@novulabs.net is not connected yet.</strong> NovuRadar uses the company mailbox to
-            email you when a proposal is sent or a client replies, and to show client replies here. Add the
-            mailbox password to the backend <code>.env</code>:
-            <pre>{`EMAIL_HOST_USER=info@novulabs.net
-EMAIL_HOST_PASSWORD=your-mailbox-password`}</pre>
+            <strong>The reply mailbox is not connected yet.</strong> NovuRadar reads client replies to your
+            proposals from this mailbox and shows them here. Add it to the backend <code>.env</code>:
+            <pre>{`EMAIL_HOST_USER=you@novulabs.net
+EMAIL_HOST_PASSWORD='your-mailbox-password'`}</pre>
             then restart the backend.
           </div>
         )}

@@ -135,9 +135,7 @@ export default function ProposalStudio({ opportunityId, sourceUrl, onApplied }: 
         applied: true,
       });
       setQuality(res.data.quality);
-      setMessage(
-        'Proposal copied and saved. The lead is now marked as "proposal" sent, and a copy is emailed to info@novulabs.net.',
-      );
+      setMessage('Proposal copied and saved. The lead is now marked as "proposal" sent.');
       onApplied?.(res.data.opportunity);
     } catch {
       setError('The project was opened, but the proposal could not be saved.');

@@ -1,7 +1,6 @@
 """
-Team alert emails, sent from the company mailbox to info@novulabs.net:
-  · when a proposal is marked as sent (a copy of what went to the client)
-  · when a client replies to a proposal
+Optional team alert email when a client replies to a proposal (only if
+TEAM_ALERT_EMAILS is set). Nothing is emailed when a proposal is generated or sent.
 
 Sending runs in a background thread so nobody waits for the mail server, and a
 mail problem never breaks the action that triggered it.
@@ -47,20 +46,6 @@ def send_team_email(subject, body, background=True):
         _send(subject, body, recipients)
 
 
-def build_proposal_sent_email(opportunity, content, user=None):
-    rows = [
-        ('Project', opportunity.requirement),
-        ('Budget', opportunity.budget_text),
-        ('Skills', ', '.join((opportunity.technology or [])[:10])),
-        ('Project link', opportunity.source_url),
-        ('Sent by', (getattr(user, 'display_name', '') or getattr(user, 'username', '')) if user else ''),
-        ('Open in NovuRadar', lead_url(opportunity)),
-    ]
-    lines = [f'{label}: {value}' for label, value in rows if value]
-    lines += ['', 'Proposal:', '-' * 40, content.strip()]
-    return f'Proposal sent: {opportunity.requirement[:120]}', '\n'.join(lines)
-
-
 def build_client_reply_email(opportunity, subject, sender, snippet):
     title = opportunity.requirement[:120] if opportunity is not None else (subject or 'a proposal')
     rows = [
@@ -74,10 +59,6 @@ def build_client_reply_email(opportunity, subject, sender, snippet):
     if snippet:
         lines += ['', 'Message:', snippet.strip()]
     return f'Client replied: {title}', '\n'.join(lines)
-
-
-def notify_proposal_sent(opportunity, content, user=None, background=True):
-    send_team_email(*build_proposal_sent_email(opportunity, content, user), background=background)
 
 
 def notify_client_reply(opportunity, subject, sender, snippet, background=True):

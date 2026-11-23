@@ -1,4 +1,4 @@
-"""Team alert emails to info@novulabs.net: proposal sent and client replied."""
+"""Reply alert emails: nothing on proposals; optional email when a client replies."""
 from email.message import EmailMessage as ParsedEmail
 
 from django.contrib.auth import get_user_model
@@ -25,24 +25,25 @@ class TeamAlertEmailTests(TestCase):
             budget_text='$1,500–3,000 USD', source_url='https://www.freelancer.com/projects/flutter/food-app',
         )
 
-    def test_marking_proposal_sent_emails_a_copy(self):
+    def test_marking_proposal_sent_sends_no_email(self):
         with self.captureOnCommitCallbacks(execute=True):
             resp = self.client.post(f'/api/v1/opportunities/{self.lead.id}/proposal/save/',
                                     {'content': 'Hello, our proposal text.', 'applied': True}, format='json')
         self.assertEqual(resp.status_code, 201)
-        self.assertEqual(len(mail.outbox), 1)
-        sent = mail.outbox[0]
-        self.assertEqual(sent.to, ['info@novulabs.net'])
-        self.assertIn('Proposal sent: Build Flutter food delivery app', sent.subject)
-        self.assertIn('Hello, our proposal text.', sent.body)
-        self.assertIn('$1,500–3,000 USD', sent.body)
-        self.assertIn(f'https://radar.test/lead/{self.lead.id}', sent.body)
-        self.assertEqual(sent.extra_headers.get(ALERT_HEADER), '1')
+        self.assertEqual(len(mail.outbox), 0)
 
-    def test_saving_a_draft_without_applying_sends_nothing(self):
+    @override_settings(TEAM_ALERT_EMAILS=[])
+    def test_reply_alert_email_is_off_by_default(self):
+        self.lead.status = 'proposal'
+        self.lead.save()
+        msg = ParsedEmail()
+        msg['Subject'] = 'Re: Build Flutter food delivery app'
+        msg['From'] = 'sara@client.com'
+        msg['Message-ID'] = '<r0@client.com>'
+        msg.set_content('Interested.')
         with self.captureOnCommitCallbacks(execute=True):
-            self.client.post(f'/api/v1/opportunities/{self.lead.id}/proposal/save/',
-                             {'content': 'Draft only'}, format='json')
+            created = process_message(msg)
+        self.assertEqual(len(created), 1)
         self.assertEqual(len(mail.outbox), 0)
 
     def test_client_reply_emails_the_team_once(self):

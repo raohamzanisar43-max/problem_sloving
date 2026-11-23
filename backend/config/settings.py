@@ -254,7 +254,8 @@ if EMAIL_HOST_USER and EMAIL_HOST_PASSWORD:
 else:
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 DEFAULT_FROM_EMAIL = os.getenv('EMAIL_FROM') or f"NovuRadar <{EMAIL_HOST_USER or 'info@novulabs.net'}>"
-# Who receives the team alerts (proposal sent, client replied). Comma-separated.
-TEAM_ALERT_EMAILS = [e.strip() for e in (os.getenv('TEAM_ALERT_EMAILS') or 'info@novulabs.net').split(',') if e.strip()]
+# Optional: also email these addresses when a client reply is detected (comma-separated).
+# Empty by default — the reply itself is already in the mailbox, and the app shows it.
+TEAM_ALERT_EMAILS = [e.strip() for e in (os.getenv('TEAM_ALERT_EMAILS') or '').split(',') if e.strip()]
 # Where links in alert emails point (the web app).
 APP_BASE_URL = (os.getenv('APP_BASE_URL') or 'https://novuradar.novulabs.net').rstrip('/')
