@@ -24,6 +24,8 @@ interface InboxStatus {
   last_check: string | null;
   last_ok: boolean | null;
   last_error: string;
+  email_alerts: boolean;
+  alert_recipients: string[];
 }
 
 export default function NotificationsPage() {
@@ -98,16 +100,19 @@ export default function NotificationsPage() {
       <div className="notif-content">
         {inbox && !inbox.configured && (
           <div className="notif-banner warn">
-            <strong>The reply inbox is not connected yet.</strong> Client replies are read from the company
-            mailbox (info@novulabs.net). Add <code>INBOX_IMAP_HOST</code>, <code>INBOX_EMAIL</code> and{' '}
-            <code>INBOX_PASSWORD</code> to the backend <code>.env</code> and restart — then every reply to a
-            proposal shows up here.
+            <strong>info@novulabs.net is not connected yet.</strong> NovuRadar uses the company mailbox to
+            email you when a proposal is sent or a client replies, and to show client replies here. Add the
+            mailbox password to the backend <code>.env</code>:
+            <pre>{`EMAIL_HOST_USER=info@novulabs.net
+EMAIL_HOST_PASSWORD=your-mailbox-password`}</pre>
+            then restart the backend.
           </div>
         )}
         {inbox?.configured && (
           <div className={`notif-banner ${inbox.last_ok === false ? 'warn' : 'ok'}`}>
             Watching <strong>{inbox.mailbox}</strong> for client replies.
             {inbox.last_check && ` Last checked ${new Date(inbox.last_check).toLocaleString()}.`}
+            {inbox.email_alerts && ` Alert emails go to ${inbox.alert_recipients.join(', ')}.`}
             {inbox.last_ok === false && inbox.last_error && <div>Problem: {inbox.last_error}</div>}
           </div>
         )}

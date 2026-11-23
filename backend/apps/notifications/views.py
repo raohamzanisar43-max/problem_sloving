@@ -1,10 +1,11 @@
+from django.conf import settings
 from django.utils import timezone
 from rest_framework import mixins, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.core.permissions import IsSalesStaff
-from . import inbox
+from . import inbox, mailer
 from .models import InboxCheck, Notification
 
 
@@ -29,6 +30,8 @@ def _inbox_status():
         'last_check': last.created_at if last else None,
         'last_ok': last.ok if last else None,
         'last_error': last.error if last else '',
+        'email_alerts': mailer.is_configured(),
+        'alert_recipients': settings.TEAM_ALERT_EMAILS,
     }
 
 

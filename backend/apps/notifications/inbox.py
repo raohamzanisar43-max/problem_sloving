@@ -26,6 +26,7 @@ from django.utils import timezone
 
 from apps.opportunities.models import Activity, Opportunity
 from apps.scoring.capability_profile import CAPABILITY_PROFILE
+from .mailer import ALERT_HEADER, notify_client_reply
 from .models import InboxCheck, InboxMessage, Notification
 
 logger = logging.getLogger(__name__)
@@ -177,7 +178,8 @@ def process_message(msg, own_address=''):
     record = InboxMessage(message_id=message_id, subject=subject, sender=sender_email, received_at=received)
     marketplace = _is_marketplace(sender_email)
     automated = IGNORE_SENDER_RE.search(sender_email) and not marketplace
-    if (own_address and sender_email == own_address.lower()) or automated:
+    own = {a.lower() for a in (own_address, settings.EMAIL_HOST_USER) if a}
+    if sender_email in own or automated or msg.get(ALERT_HEADER):
         record.save()
         return []
 
@@ -212,6 +214,9 @@ def process_message(msg, own_address=''):
                 opportunity=lead, action='client_reply', to_value=who[:255],
                 payload={'subject': subject, 'from': sender_email, 'snippet': snippet[:300]},
             )
+        # One alert email to the team mailbox, after the records are saved.
+        transaction.on_commit(lambda: notify_client_reply(
+            lead, subject, f'{who} <{sender_email}>' if sender_name else sender_email, snippet))
     return created
 
 

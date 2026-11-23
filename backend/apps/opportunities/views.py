@@ -264,6 +264,9 @@ class OpportunityViewSet(viewsets.ModelViewSet):
                 opportunity.revision += 1
                 opportunity.save(update_fields=fields)
                 emit_for_opportunity(opportunity, reason='status')
+            if applied:
+                from apps.notifications.mailer import notify_proposal_sent
+                transaction.on_commit(lambda: notify_proposal_sent(opportunity, content, request.user))
         payload = self._proposal_payload(opportunity, draft, length, {'length': length})
         payload['opportunity'] = OpportunityDetailSerializer(opportunity, context={'request': request}).data
         return Response(payload, status=status.HTTP_201_CREATED)

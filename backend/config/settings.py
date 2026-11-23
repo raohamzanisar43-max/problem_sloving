@@ -174,12 +174,14 @@ CORS_ALLOW_CREDENTIALS = True
 
 # Novu Radar specific
 # Reply inbox: the mailbox clients answer proposals at (read-only over IMAP).
-# Leave INBOX_IMAP_HOST empty to switch the watcher off.
 INBOX = {
-    'HOST': os.getenv('INBOX_IMAP_HOST', ''),
+    # Defaults to the same company mailbox used for sending (EMAIL_HOST_USER), so
+    # one email + password in .env switches on both alerts and reply tracking.
+    'HOST': os.getenv('INBOX_IMAP_HOST') or ((os.getenv('EMAIL_HOST') or 'mail.novulabs.net')
+                                            if os.getenv('EMAIL_HOST_PASSWORD') else ''),
     'PORT': int(os.getenv('INBOX_IMAP_PORT', '993') or 993),
-    'USER': os.getenv('INBOX_EMAIL', ''),
-    'PASSWORD': os.getenv('INBOX_PASSWORD', ''),
+    'USER': os.getenv('INBOX_EMAIL') or os.getenv('EMAIL_HOST_USER', ''),
+    'PASSWORD': os.getenv('INBOX_PASSWORD') or os.getenv('EMAIL_HOST_PASSWORD', ''),
     'FOLDER': os.getenv('INBOX_FOLDER', 'INBOX'),
     'LOOKBACK_DAYS': int(os.getenv('INBOX_LOOKBACK_DAYS', '3') or 3),
     'CHECK_MINUTES': int(os.getenv('INBOX_CHECK_MINUTES', '5') or 5),
@@ -236,11 +238,23 @@ CELERY_BEAT_SCHEDULE = {
     },
 }
 
-# Email
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = os.getenv('EMAIL_HOST', 'localhost')
-EMAIL_PORT = int(os.getenv('EMAIL_PORT', '25'))
+# Email — the company mailbox (info@novulabs.net on mail.novulabs.net) sends the
+# team alerts. Without EMAIL_HOST_USER / EMAIL_HOST_PASSWORD, emails are only
+# printed to the terminal (handy for local testing).
+EMAIL_HOST = os.getenv('EMAIL_HOST') or 'mail.novulabs.net'
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
 EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'false').lower() in ('1', 'true', 'yes')
-DEFAULT_FROM_EMAIL = os.getenv('EMAIL_FROM', 'novu-radar@example.com')
+# SSL on port 465 by default; an explicit EMAIL_USE_TLS=true (port 587) wins.
+EMAIL_USE_SSL = (not EMAIL_USE_TLS) and os.getenv('EMAIL_USE_SSL', 'true').lower() in ('1', 'true', 'yes')
+EMAIL_PORT = int(os.getenv('EMAIL_PORT') or ('465' if EMAIL_USE_SSL else '587'))
+EMAIL_TIMEOUT = 30
+if EMAIL_HOST_USER and EMAIL_HOST_PASSWORD:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+else:
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+DEFAULT_FROM_EMAIL = os.getenv('EMAIL_FROM') or f"NovuRadar <{EMAIL_HOST_USER or 'info@novulabs.net'}>"
+# Who receives the team alerts (proposal sent, client replied). Comma-separated.
+TEAM_ALERT_EMAILS = [e.strip() for e in (os.getenv('TEAM_ALERT_EMAILS') or 'info@novulabs.net').split(',') if e.strip()]
+# Where links in alert emails point (the web app).
+APP_BASE_URL = (os.getenv('APP_BASE_URL') or 'https://novuradar.novulabs.net').rstrip('/')
