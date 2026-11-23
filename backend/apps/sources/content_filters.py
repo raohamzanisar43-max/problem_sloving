@@ -363,9 +363,66 @@ def _tokens(text):
     return {_norm_token(w) for w in re.findall(r'[a-z0-9+#.]+', raw) if w.strip('.')}
 
 
+def _plain_core(text):
+    return {t for t in _tokens(text) if t not in _KEYWORD_FILLER}
+
+
+# Search-engine syntax in a keyword: -excluded words, site:/intitle: operators.
+_EXCLUDED_TERM_RE = re.compile(r'(?<!\S)-(?:"[^"]*"|\S+)')
+_SEARCH_OPERATOR_RE = re.compile(r'(?<!\S)(?:site|inurl|intitle|intext|filetype):\S+', re.IGNORECASE)
+_TERM_RE = re.compile(r'"([^"]*)"|(\S+)')
+
+
+def keyword_groups(query):
+    """
+    A keyword as required groups of alternatives, honouring search syntax:
+    ``"web app" OR website Pakistan -jobs`` → [[{web, app}, {website}], [{pakistan}]].
+    A post matches when, for every group, all the words of one alternative
+    appear. Excluded terms (-jobs) and operators (site:) are left out — they
+    only steer the search engine. A group with a pure-filler alternative
+    (e.g. "required") is always satisfied, so it is dropped.
+    """
+    cleaned = _SEARCH_OPERATOR_RE.sub(' ', _EXCLUDED_TERM_RE.sub(' ', query or ''))
+    # Keep two-word names together before splitting into terms (as _tokens does).
+    cleaned = re.sub(r'(?i)\bfull[\s-]stack\b', 'fullstack', cleaned)
+    cleaned = re.sub(r'(?i)\breact\s+native\b', 'reactnative', cleaned)
+    cleaned = re.sub(r'(?i)\bweb\s+site\b', 'website', cleaned)
+    groups, join_next = [], False
+    for match in _TERM_RE.finditer(cleaned):
+        phrase, word = match.group(1), match.group(2)
+        if word == 'OR':
+            join_next = bool(groups)
+            continue
+        core = _plain_core(phrase if phrase is not None else word)
+        if join_next:
+            groups[-1].append(core)
+        else:
+            groups.append([core])
+        join_next = False
+    return [g for g in groups if all(alt for alt in g)]
+
+
 def keyword_core(query):
-    """The meaningful words of a search keyword, normalised for matching."""
-    return {t for t in _tokens(query) if t not in _KEYWORD_FILLER}
+    """
+    The meaningful words of a search keyword (first alternative of each OR
+    group), normalised — used to build marketplace search queries.
+    """
+    words = set()
+    for group in keyword_groups(query):
+        words |= group[0]
+    return words
+
+
+def keyword_matches(query, words, ignore=frozenset()):
+    """
+    True when the post's words satisfy every group of the keyword. ``ignore``
+    words (role words on marketplaces) are implied, so an alternative made of
+    them only is satisfied by any post.
+    """
+    groups = keyword_groups(query)
+    if not groups:
+        return False
+    return all(any((alt - ignore) <= words for alt in g) for g in groups)
 
 
 def search_terms_for(source):
@@ -411,13 +468,9 @@ def matched_keyword(*, title='', text='', url='', keywords=None, marketplace=Fal
     """
     keywords = active_search_keywords() if keywords is None else keywords
     words = _tokens(f'{title} {text} {(url or "").replace("-", " ").replace("_", " ").replace("/", " ")}')
+    ignore = frozenset(ROLE_WORDS) if marketplace else frozenset()
     for query in keywords:
-        core = keyword_core(query)
-        if not core:
-            continue
-        if marketplace:
-            core = core - ROLE_WORDS
-        if core <= words:
+        if keyword_matches(query, words, ignore):
             return query
     return None
 
