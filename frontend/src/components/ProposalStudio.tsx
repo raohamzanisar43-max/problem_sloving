@@ -31,9 +31,9 @@ const TONES = [
 ];
 
 const LENGTHS = [
-  { value: 'short', label: 'Short (~100 words)' },
-  { value: 'medium', label: 'Medium (~180 words)' },
-  { value: 'long', label: 'Long (~300 words)' },
+  { value: 'short', label: 'Short (~180 words)' },
+  { value: 'medium', label: 'Medium (~300 words)' },
+  { value: 'long', label: 'Long (~450 words)' },
 ];
 
 function qualityClass(score: number) {
@@ -46,6 +46,8 @@ export default function ProposalStudio({ opportunityId, sourceUrl, onApplied }: 
   const [tone, setTone] = useState('professional');
   const [length, setLength] = useState('medium');
   const [instructions, setInstructions] = useState('');
+  const [includeContact, setIncludeContact] = useState(true);
+  const [notice, setNotice] = useState('');
   const [content, setContent] = useState('');
   const [quality, setQuality] = useState<Quality | null>(null);
   const [warning, setWarning] = useState('');
@@ -86,15 +88,18 @@ export default function ProposalStudio({ opportunityId, sourceUrl, onApplied }: 
     setError('');
     setMessage('');
     setWarning('');
+    setNotice('');
     try {
       const res = await apiClient.post(`/opportunities/${opportunityId}/proposal/`, {
         tone,
         length,
         instructions,
+        include_contact: includeContact,
       });
       setContent(res.data.content);
       setQuality(res.data.quality);
       setWarning(res.data.warning || '');
+      setNotice(res.data.notice || '');
     } catch {
       setError('Could not generate the proposal. Please try again.');
     } finally {
@@ -162,6 +167,14 @@ export default function ProposalStudio({ opportunityId, sourceUrl, onApplied }: 
             ))}
           </select>
         </label>
+        <label className="proposal-check">
+          <input
+            type="checkbox"
+            checked={includeContact}
+            onChange={(e) => setIncludeContact(e.target.checked)}
+          />
+          <span>Add contact details (info@novulabs.net, +92 326 8292154)</span>
+        </label>
         <button type="button" className="proposal-generate" onClick={generate} disabled={busy !== ''}>
           {busy === 'generate' ? 'Writing…' : content ? 'Regenerate' : 'Generate proposal'}
         </button>
@@ -176,6 +189,7 @@ export default function ProposalStudio({ opportunityId, sourceUrl, onApplied }: 
       />
 
       {warning && <p className="proposal-warning">{warning}</p>}
+      {notice && <p className="proposal-notice">{notice}</p>}
       {error && <p className="proposal-error">{error}</p>}
 
       <textarea
@@ -183,7 +197,7 @@ export default function ProposalStudio({ opportunityId, sourceUrl, onApplied }: 
         value={content}
         placeholder="Your AI-written proposal will appear here — edit it freely before sending."
         onChange={(e) => handleEdit(e.target.value)}
-        rows={14}
+        rows={20}
       />
 
       {quality && content && (

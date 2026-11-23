@@ -44,7 +44,7 @@
   box-sizing: border-box;
   resize: vertical;
   line-height: 1.5;
-  min-height: 220px;
+  min-height: 380px;
 }
 
 .proposal-generate,
@@ -147,4 +147,22 @@
   color: var(--color-primary-dark);
   font-size: 13px;
   margin-top: 8px;
+}
+
+.proposal-controls label.proposal-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--color-text);
+  padding-bottom: 8px;
+}
+
+.proposal-notice {
+  background: #eef5ff;
+  border: 1px solid #b9d3f5;
+  color: #1d4a7a;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
 }

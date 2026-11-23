@@ -41,6 +41,8 @@ def posted_cutoff(bucket):
 
 def with_posted_at(queryset):
     """The date a post counts from: when the source published it, else when we detected it."""
+    if 'posted_at' in queryset.query.annotations:
+        return queryset
     return queryset.annotate(posted_at=Coalesce('source_published_at', 'detected_at'))
 
 
@@ -57,12 +59,25 @@ class OpportunityFilter(filters.FilterSet):
     search = filters.CharFilter(method='filter_search')
     posted = filters.ChoiceFilter(choices=POSTED_CHOICES, method='filter_posted')
     actionable = filters.BooleanFilter(method='filter_actionable')
+    min_score = filters.NumberFilter(field_name='score', lookup_expr='gte')
+    # ?source=freelancer (marketplace projects) or ?source=web (web search leads)
+    source = filters.ChoiceFilter(
+        choices=[('freelancer', 'Freelancer.com'), ('reddit', 'Reddit'), ('web', 'Web search')],
+        method='filter_source')
     # ?since=24h / 7d / 30d, evaluated by the DB against the full table.
     since = filters.CharFilter(method='filter_since')
 
     class Meta:
         model = Opportunity
-        fields = ['service', 'status', 'intent', 'kind', 'owner', 'band', 'posted', 'actionable']
+        fields = ['service', 'status', 'intent', 'kind', 'owner', 'band', 'posted', 'actionable',
+                  'min_score', 'source']
+
+    def filter_source(self, queryset, name, value):
+        platforms = {'freelancer': Q(source_url__icontains='freelancer.com'),
+                     'reddit': Q(source_url__icontains='reddit.com')}
+        if value in platforms:
+            return queryset.filter(platforms[value])
+        return queryset.exclude(platforms['freelancer'] | platforms['reddit'])
 
     def filter_actionable(self, queryset, name, value):
         """actionable=true hides rejected and closed leads; false/absent leaves the list unchanged."""
@@ -99,7 +114,7 @@ class OpportunityViewSet(viewsets.ModelViewSet):
     pagination_class = OpportunityCursorPagination
     filterset_class = OpportunityFilter
     search_fields = ['requirement', 'text', 'company_name']
-    ordering_fields = ['score', 'detected_at', 'source_published_at']
+    ordering_fields = ['score', 'detected_at', 'source_published_at', 'posted_at']
     ordering = ['-score', '-detected_at']
 
     def get_permissions(self):
@@ -110,7 +125,8 @@ class OpportunityViewSet(viewsets.ModelViewSet):
         return [IsSalesStaff()]
 
     def get_queryset(self):
-        qs = Opportunity.objects.select_related('owner').all()
+        # posted_at (published date, else detected date) drives the "Newest" sort and date filters.
+        qs = with_posted_at(Opportunity.objects.select_related('owner').all())
         user = self.request.user
         # Executives see only assigned + unassigned (demo policy); managers see all
         if user.role == 'sales_executive' and not user.is_superuser:
@@ -189,6 +205,7 @@ class OpportunityViewSet(viewsets.ModelViewSet):
             tone=str(request.data.get('tone', 'professional')),
             length=str(request.data.get('length', 'medium')),
             instructions=str(request.data.get('instructions', '') or ''),
+            include_contact=str(request.data.get('include_contact', True)).lower() not in ('false', '0', 'no'),
         )
         draft = Draft.objects.create(
             opportunity=opportunity,

@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 COLLECTOR_MAP = {
     'web_search': 'apps.sources.collectors.brave.BraveCollector',
     'x': 'apps.sources.collectors.x_collector.XCollector',
-    'reddit': 'apps.sources.collectors.reddit_collector.RedditCollector',
+    'reddit': 'apps.sources.collectors.reddit_apify.RedditApifyCollector',
     'rss': 'apps.sources.collectors.rss_collector.RSSCollector',
     'rfp_portal': 'apps.sources.collectors.rss_collector.RSSCollector',
     'freelancer': 'apps.sources.collectors.freelancer.FreelancerCollector',

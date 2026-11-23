@@ -8,6 +8,7 @@ import SourceHealthPage from './pages/SourceHealthPage';
 import SettingsPage from './pages/SettingsPage';
 import OpportunityQueuePage from './pages/OpportunityQueuePage';
 import ReviewQueuePage from './pages/ReviewQueuePage';
+import NotificationsPage from './pages/NotificationsPage';
 import AppLayout from './layouts/AppLayout';
 import { isLoggedIn } from './api/authService';
 
@@ -29,6 +30,7 @@ function App() {
         >
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/opportunities" element={<OpportunityQueuePage />} />
+          <Route path="/notifications" element={<NotificationsPage />} />
           <Route path="/pipeline" element={<SalesPipelinePage />} />
           <Route path="/review" element={<ReviewQueuePage />} />
           <Route path="/source-health" element={<SourceHealthPage />} />
