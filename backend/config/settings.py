@@ -37,6 +37,7 @@ INSTALLED_APPS = [
     'apps.contacts',
     'apps.scoring',
     'apps.exports',
+    'apps.notifications',
 ]
 
 MIDDLEWARE = [
@@ -172,6 +173,18 @@ CORS_ALLOWED_ORIGINS = [
 CORS_ALLOW_CREDENTIALS = True
 
 # Novu Radar specific
+# Reply inbox: the mailbox clients answer proposals at (read-only over IMAP).
+# Leave INBOX_IMAP_HOST empty to switch the watcher off.
+INBOX = {
+    'HOST': os.getenv('INBOX_IMAP_HOST', ''),
+    'PORT': int(os.getenv('INBOX_IMAP_PORT', '993') or 993),
+    'USER': os.getenv('INBOX_EMAIL', ''),
+    'PASSWORD': os.getenv('INBOX_PASSWORD', ''),
+    'FOLDER': os.getenv('INBOX_FOLDER', 'INBOX'),
+    'LOOKBACK_DAYS': int(os.getenv('INBOX_LOOKBACK_DAYS', '3') or 3),
+    'CHECK_MINUTES': int(os.getenv('INBOX_CHECK_MINUTES', '5') or 5),
+}
+
 RADAR = {
     'QUALIFICATION_CONFIDENCE': float(os.getenv('QUALIFICATION_CONFIDENCE', '0.75')),
     'COLLECTION_INTERVAL_MINUTES': int(os.getenv('COLLECTION_INTERVAL_MINUTES', '15')),

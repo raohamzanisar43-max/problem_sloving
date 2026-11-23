@@ -41,6 +41,20 @@ def seconds_until_due(interval_seconds, free):
     return max(0, int(interval_seconds - elapsed))
 
 
+# Reply inbox (client answers to proposals) — cheap, so checked every few minutes.
+INBOX_INTERVAL_SECONDS = max(1, settings.INBOX.get('CHECK_MINUTES', 5)) * 60
+
+
+def run_inbox_check():
+    from apps.notifications.inbox import check_inbox
+    try:
+        result = check_inbox()
+        if result.get('notified') or not result.get('ok', True):
+            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Inbox: {result}")
+    except Exception as exc:
+        print(f"  Inbox error: {exc}")
+
+
 def run_sweep(label, **kwargs):
     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Running {label} collection...")
     try:
@@ -55,7 +69,11 @@ if __name__ == '__main__':
         f"Paid sources every {INTERVAL_SECONDS // 60} minute(s), "
         f"Freelancer.com every {FREE_INTERVAL_SECONDS // 60} minute(s). Press Ctrl+C to stop."
     )
+    from apps.notifications.inbox import is_configured
+    inbox_on = is_configured()
+    print(f"Reply inbox: {'every ' + str(INBOX_INTERVAL_SECONDS // 60) + ' minute(s)' if inbox_on else 'not configured'}.")
     now = time.time()
+    next_inbox = now
     next_paid = now + seconds_until_due(INTERVAL_SECONDS, free=False)
     next_free = now + seconds_until_due(FREE_INTERVAL_SECONDS, free=True)
     if next_paid > now:
@@ -71,4 +89,8 @@ if __name__ == '__main__':
         if now >= next_paid:
             run_sweep('paid-source', exclude_types=FREE_TYPES)
             next_paid = time.time() + INTERVAL_SECONDS
-        time.sleep(max(1, min(next_free, next_paid) - time.time()))
+        if inbox_on and now >= next_inbox:
+            run_inbox_check()
+            next_inbox = time.time() + INBOX_INTERVAL_SECONDS
+        wake = min(next_free, next_paid, next_inbox if inbox_on else next_paid)
+        time.sleep(max(1, wake - time.time()))

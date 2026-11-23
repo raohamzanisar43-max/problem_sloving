@@ -54,6 +54,13 @@ const BAND_COLOR_VARS: Record<string, string> = {
   Archive: '--color-band-archive',
 };
 
+interface ClientReply {
+  id: string;
+  to_value: string;
+  created_at: string;
+  payload: { subject?: string; from?: string; snippet?: string };
+}
+
 export default function LeadDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [opp, setOpp] = useState<Opportunity | null>(null);
@@ -61,6 +68,7 @@ export default function LeadDetailPage() {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [shareMessage, setShareMessage] = useState('');
+  const [replies, setReplies] = useState<ClientReply[]>([]);
 
   const loadOpportunity = useCallback(() => {
     return apiClient.get(`/opportunities/${id}/`).then((res) => setOpp(res.data));
@@ -70,10 +78,14 @@ export default function LeadDetailPage() {
     Promise.all([
       loadOpportunity(),
       apiClient.get('/me/').then((res) => setMe(res.data)),
+      apiClient
+        .get<(ClientReply & { action: string })[]>(`/opportunities/${id}/activities/`)
+        .then((res) => setReplies(res.data.filter((a) => a.action === 'client_reply')))
+        .catch(() => undefined),
     ])
       .catch((err) => console.log('Error loading lead detail:', err))
       .finally(() => setLoading(false));
-  }, [loadOpportunity]);
+  }, [loadOpportunity, id]);
 
   async function patchOpportunity(body: Record<string, unknown>) {
     if (!opp) return;
@@ -188,6 +200,22 @@ export default function LeadDetailPage() {
             <summary>Client's post</summary>
             <p>{opp.text}</p>
           </details>
+        )}
+
+        {replies.length > 0 && (
+          <>
+            <h2 className="section-title">Client replies</h2>
+            {replies.map((r) => (
+              <div key={r.id} className="client-reply">
+                <div className="client-reply-head">
+                  <strong>{r.to_value || r.payload.from}</strong>
+                  <span>{new Date(r.created_at).toLocaleString()}</span>
+                </div>
+                {r.payload.subject && <p className="client-reply-subject">{r.payload.subject}</p>}
+                {r.payload.snippet && <p className="client-reply-body">{r.payload.snippet}</p>}
+              </div>
+            ))}
+          </>
         )}
 
         <h2 className="section-title">Proposal</h2>

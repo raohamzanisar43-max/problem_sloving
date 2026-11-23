@@ -1,0 +1,136 @@
+.notif-page {
+  min-height: 100vh;
+}
+
+.notif-content {
+  max-width: 900px;
+  padding: 24px 32px;
+}
+
+.notif-banner {
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+
+.notif-banner.warn {
+  background: #fff4e5;
+  border: 1px solid #f0c48a;
+  color: #7a4a06;
+}
+
+.notif-banner.ok {
+  background: var(--color-primary-light);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+}
+
+.notif-banner code {
+  font-size: 12px;
+}
+
+.notif-toolbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.notif-toolbar button {
+  padding: 8px 14px;
+  border: 1px solid var(--color-border);
+  background: var(--color-card);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.notif-toolbar button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.notif-count {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  margin-right: auto;
+}
+
+.notif-message {
+  font-size: 13px;
+  color: var(--color-primary-dark);
+}
+
+.notif-empty {
+  text-align: center;
+  color: var(--color-text-muted);
+  margin-top: 40px;
+}
+
+.notif-card {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  margin-bottom: 10px;
+}
+
+.notif-card.clickable {
+  cursor: pointer;
+}
+
+.notif-card.clickable:hover {
+  box-shadow: var(--shadow-card);
+}
+
+.notif-card.unread {
+  border-left: 4px solid var(--color-primary);
+}
+
+.notif-card-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.notif-kind {
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+.notif-title {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 6px 0 2px;
+  color: var(--color-text);
+}
+
+.notif-sender {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin: 0 0 6px;
+}
+
+.notif-body {
+  font-size: 13px;
+  white-space: pre-wrap;
+  color: var(--color-text);
+  margin: 0;
+  max-height: 160px;
+  overflow: hidden;
+}
+
+.notif-link {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-primary);
+}
