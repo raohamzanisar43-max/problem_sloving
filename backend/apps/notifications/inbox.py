@@ -14,7 +14,7 @@ import email
 import imaplib
 import logging
 import re
-from datetime import timedelta
+from datetime import timedelta, timezone as dt_timezone
 from email.header import decode_header, make_header
 from email.utils import parseaddr, parsedate_to_datetime
 from html import unescape
@@ -174,6 +174,8 @@ def process_message(msg, own_address=''):
         received = parsedate_to_datetime(msg.get('Date')) if msg.get('Date') else None
     except (TypeError, ValueError):
         received = None
+    if received is not None and timezone.is_naive(received):
+        received = timezone.make_aware(received, dt_timezone.utc)
 
     record = InboxMessage(message_id=message_id, subject=subject, sender=sender_email, received_at=received)
     marketplace = _is_marketplace(sender_email)
