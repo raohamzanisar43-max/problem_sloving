@@ -371,12 +371,12 @@ def keyword_core(query):
 def search_terms_for(source):
     """
     The SearchTerm rows a source collects with: its own enabled keywords, or
-    the shared list when it has none. Freelancer.com uses the keywords managed
-    on the Settings screen (the web-search source's), so both stay in step.
+    the shared list when it has none. Freelancer.com and Reddit use the keywords
+    managed on the Settings screen (the web-search source's), so all stay in step.
     """
     from apps.sources.models import SearchTerm, Source
 
-    if source.connector_type == 'freelancer':
+    if source.connector_type in ('freelancer', 'reddit'):
         web = Source.objects.filter(connector_type='web_search').order_by('created_at').first()
         if web is not None:
             terms = list(web.search_terms.filter(enabled=True))

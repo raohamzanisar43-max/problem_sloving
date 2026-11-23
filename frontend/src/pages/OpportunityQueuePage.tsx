@@ -71,6 +71,7 @@ const EMPTY_FILTERS = {
 
 function sourceLabel(item: Opportunity) {
   if ((item.source_url || '').includes('freelancer.com')) return 'Freelancer.com';
+  if ((item.source_url || '').includes('reddit.com')) return 'Reddit';
   return item.source_name && item.source_name !== 'example_web' ? item.source_name : 'Web';
 }
 
@@ -190,6 +191,7 @@ export default function OpportunityQueuePage() {
             <select value={filters.source} onChange={(e) => setFilters({ ...filters, source: e.target.value })}>
               <option value="">All sources</option>
               <option value="freelancer">Freelancer.com projects</option>
+              <option value="reddit">Reddit posts</option>
               <option value="web">Web search leads</option>
             </select>
           </div>

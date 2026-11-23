@@ -13,7 +13,7 @@ class Source(models.Model):
         ('rss', 'RSS / public website'),
         ('rfp_portal', 'RFP / tender portal'),
         ('x', 'X (Twitter) recent search'),
-        ('reddit', 'Reddit Data API'),
+        ('reddit', 'Reddit hiring posts (via Apify)'),
         ('linkedin', 'LinkedIn (conditional)'),
         ('manual', 'Manual capture'),
         ('freelancer', 'Freelancer.com projects'),

@@ -200,6 +200,9 @@ RADAR = {
     # short interval or repeated restarts can never drain the prepaid credit.
     'BRAVE_DAILY_CALL_LIMIT': int(os.getenv('BRAVE_DAILY_CALL_LIMIT', '30') or 30),
     # Free sources (Freelancer.com) are collected this often by run_scheduler.py.
+    # Apify (pay-per-result) fetches Reddit posts; checked twice a day by default.
+    'APIFY_TOKEN': os.getenv('APIFY_TOKEN', ''),
+    'REDDIT_INTERVAL_MINUTES': int(os.getenv('REDDIT_INTERVAL_MINUTES', '720') or 720),
     'FREE_SOURCE_INTERVAL_MINUTES': int(os.getenv('FREE_SOURCE_INTERVAL_MINUTES', '60') or 60),
     'X_BEARER_TOKEN': os.getenv('X_BEARER_TOKEN', ''),
     'REDDIT_CLIENT_ID': os.getenv('REDDIT_CLIENT_ID', ''),

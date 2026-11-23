@@ -61,8 +61,9 @@ class OpportunityFilter(filters.FilterSet):
     actionable = filters.BooleanFilter(method='filter_actionable')
     min_score = filters.NumberFilter(field_name='score', lookup_expr='gte')
     # ?source=freelancer (marketplace projects) or ?source=web (web search leads)
-    source = filters.ChoiceFilter(choices=[('freelancer', 'Freelancer.com'), ('web', 'Web search')],
-                                  method='filter_source')
+    source = filters.ChoiceFilter(
+        choices=[('freelancer', 'Freelancer.com'), ('reddit', 'Reddit'), ('web', 'Web search')],
+        method='filter_source')
     # ?since=24h / 7d / 30d, evaluated by the DB against the full table.
     since = filters.CharFilter(method='filter_since')
 
@@ -72,8 +73,11 @@ class OpportunityFilter(filters.FilterSet):
                   'min_score', 'source']
 
     def filter_source(self, queryset, name, value):
-        freelancer = Q(source_url__icontains='freelancer.com')
-        return queryset.filter(freelancer) if value == 'freelancer' else queryset.exclude(freelancer)
+        platforms = {'freelancer': Q(source_url__icontains='freelancer.com'),
+                     'reddit': Q(source_url__icontains='reddit.com')}
+        if value in platforms:
+            return queryset.filter(platforms[value])
+        return queryset.exclude(platforms['freelancer'] | platforms['reddit'])
 
     def filter_actionable(self, queryset, name, value):
         """actionable=true hides rejected and closed leads; false/absent leaves the list unchanged."""

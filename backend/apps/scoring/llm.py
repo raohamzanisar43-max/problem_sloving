@@ -52,6 +52,8 @@ EXTRACTION_GUIDANCE = (
     'URL; use them as evidence of what kind of page this is. '
     'Use primary_category WEBSITE for website, redesign or e-commerce needs, COMPLIANCE_AML, ACCOUNTING_TAX or '
     'GOVERNANCE_AUDIT for those advisory needs, and the matching category for larger projects. '
+    'Partner or co-founder searches that offer only equity or revenue share, and people offering their own '
+    'services ("for hire", portfolios), are intent=nonbuyer. '
     'Give the buyer country when stated, and keep confidence low when the text is vague.'
 )
 
