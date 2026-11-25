@@ -109,9 +109,10 @@ EMAIL_HOST_PASSWORD='your-mailbox-password'`}</pre>
         )}
         {inbox?.configured && (
           <div className={`notif-banner ${inbox.last_ok === false ? 'warn' : 'ok'}`}>
-            Watching <strong>{inbox.mailbox}</strong> for client replies.
+            Watching <strong>{inbox.mailbox}</strong> for replies to posts you applied to through NovuRadar.
             {inbox.last_check && ` Last checked ${new Date(inbox.last_check).toLocaleString()}.`}
-            {inbox.email_alerts && ` Alert emails go to ${inbox.alert_recipients.join(', ')}.`}
+            {inbox.email_alerts && inbox.alert_recipients.length > 0 &&
+              ` Alert emails go to ${inbox.alert_recipients.join(', ')}.`}
             {inbox.last_ok === false && inbox.last_error && <div>Problem: {inbox.last_error}</div>}
           </div>
         )}
@@ -138,7 +139,7 @@ EMAIL_HOST_PASSWORD='your-mailbox-password'`}</pre>
           <p className="notif-empty">Loading…</p>
         ) : items.length === 0 ? (
           <p className="notif-empty">
-            No notifications yet. When a client replies to one of your proposals, it will appear here.
+            No notifications yet. When a client replies to a post you applied to here ("Copy, open project &amp; mark sent"), it will appear here.
           </p>
         ) : (
           items.map((item) => (

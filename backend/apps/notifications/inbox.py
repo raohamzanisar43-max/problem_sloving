@@ -25,20 +25,15 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.opportunities.models import Activity, Opportunity
-from apps.scoring.capability_profile import CAPABILITY_PROFILE
 from .mailer import ALERT_HEADER, notify_client_reply
 from .models import InboxCheck, InboxMessage, Notification
 
 logger = logging.getLogger(__name__)
 
-# Leads someone has applied to / is talking to — the ones a reply can belong to.
-REPLY_STATUSES = ('proposal', 'contacted', 'meeting', 'reviewed', 'won')
+# Only leads applied to through NovuRadar (proposal marked as sent in the
+# Proposal Studio) can receive a reply notification; every other email in the
+# mailbox is ignored.
 MARKETPLACE_DOMAINS = ('freelancer.com', 'upwork.com', 'fiverr.com', 'peopleperhour.com', 'guru.com')
-# Marketplace alerts worth a notification even when no lead matches.
-MARKETPLACE_ALERT_RE = re.compile(
-    r'message|messaged|sent you|replied|reply|award|awarded|hire|hired|milestone|chat|invite|interview|offer',
-    re.IGNORECASE,
-)
 # Automated mail that is never a client reply.
 IGNORE_SENDER_RE = re.compile(r'no-?reply@|mailer-daemon|postmaster@', re.IGNORECASE)
 STAFF_ROLES = ('admin', 'sales_manager', 'sales_executive')
@@ -100,8 +95,10 @@ def _url_slug(url):
 
 
 def candidate_leads():
+    """Leads whose proposal was marked as sent in NovuRadar in the last 120 days."""
     since = timezone.now() - timedelta(days=120)
-    return Opportunity.objects.filter(status__in=REPLY_STATUSES, updated_at__gte=since).select_related('owner')
+    applied = Activity.objects.filter(action='status_change', to_value='proposal', created_at__gte=since)
+    return Opportunity.objects.filter(id__in=applied.values('opportunity_id')).select_related('owner')
 
 
 def match_opportunity(subject, body, sender_email, leads=None):
@@ -129,14 +126,6 @@ def match_opportunity(subject, body, sender_email, leads=None):
 def _is_marketplace(sender_email):
     domain = sender_email.rsplit('@', 1)[-1].lower() if '@' in sender_email else ''
     return any(domain == d or domain.endswith('.' + d) for d in MARKETPLACE_DOMAINS)
-
-
-def _looks_like_reply_to_us(subject, body):
-    """A reply to an email that carried our proposal/signature."""
-    contact = CAPABILITY_PROFILE['contact']['email'].lower()
-    return bool(re.match(r'^\s*(re|aw|sv)\s*:', subject, re.IGNORECASE)) and (
-        contact in body.lower() or 'novulabs' in body.lower()
-    )
 
 
 def recipients_for(opportunity):
@@ -188,16 +177,12 @@ def process_message(msg, own_address=''):
     body = message_text(msg)
     lead = match_opportunity(subject, body, sender_email)
 
-    if lead is not None:
-        kind = 'marketplace_message' if marketplace else 'client_reply'
-        title = f'Reply on: {lead.requirement[:150]}'
-    elif marketplace and MARKETPLACE_ALERT_RE.search(subject):
-        kind, title = 'marketplace_message', subject or 'New marketplace message'
-    elif _looks_like_reply_to_us(subject, body):
-        kind, title = 'client_reply', subject
-    else:
+    if lead is None:
+        # Not a reply to a post applied to through NovuRadar: ignore it.
         record.save()
         return []
+    kind = 'marketplace_message' if marketplace else 'client_reply'
+    title = f'Reply on: {lead.requirement[:150]}'
 
     who = sender_name or sender_email
     created = []
@@ -211,11 +196,10 @@ def process_message(msg, own_address=''):
                 recipient=user, opportunity=lead, kind=kind, title=title[:255],
                 body=f'{subject}\n\n{snippet}'.strip(), sender=who[:255], message_id=message_id,
             ))
-        if lead is not None:
-            Activity.objects.create(
-                opportunity=lead, action='client_reply', to_value=who[:255],
-                payload={'subject': subject, 'from': sender_email, 'snippet': snippet[:300]},
-            )
+        Activity.objects.create(
+            opportunity=lead, action='client_reply', to_value=who[:255],
+            payload={'subject': subject, 'from': sender_email, 'snippet': snippet[:300]},
+        )
         # One alert email to the team mailbox, after the records are saved.
         transaction.on_commit(lambda: notify_client_reply(
             lead, subject, f'{who} <{sender_email}>' if sender_name else sender_email, snippet))
