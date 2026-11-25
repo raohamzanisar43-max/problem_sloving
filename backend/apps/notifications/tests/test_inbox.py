@@ -8,7 +8,7 @@ from rest_framework.test import APIClient
 
 from apps.notifications.inbox import check_inbox, process_message
 from apps.notifications.models import InboxMessage, Notification
-from apps.opportunities.models import Opportunity
+from apps.opportunities.models import Activity, Opportunity
 
 User = get_user_model()
 
@@ -32,6 +32,9 @@ class InboxMatchingTests(TestCase):
             requirement='Build Flutter food delivery app', text='...', status='proposal', owner=self.owner,
             source_url='https://www.freelancer.com/projects/flutter/build-flutter-food-delivery-app',
         )
+        # Applied through NovuRadar ("Copy, open project & mark sent").
+        Activity.objects.create(opportunity=self.lead, action='status_change', from_value='new',
+                                to_value='proposal', payload={'via': 'proposal_studio'})
 
     def test_reply_matched_by_title_notifies_owner_and_logs_activity(self):
         created = process_message(mail('Re: Build Flutter food delivery app', 'Sounds good, can we talk tomorrow?'))
@@ -60,11 +63,21 @@ class InboxMatchingTests(TestCase):
         self.assertEqual(process_message(mail('Newsletter', 'Big sale this week', msg_id='<2@x>')), [])
         self.assertTrue(InboxMessage.objects.filter(message_id='<2@x>', notified=False).exists())
 
-    def test_reply_to_our_proposal_without_lead_notifies_everyone(self):
-        body = 'Interested, please call.\n\n> Best regards,\n> NovuLabs Team\n> info@novulabs.net'
-        created = process_message(mail('Re: Your proposal', body, msg_id='<3@x>'))
-        self.assertEqual({n.recipient for n in created}, {self.owner, self.other})
-        self.assertIsNone(created[0].opportunity)
+    def test_ordinary_mailbox_replies_are_ignored(self):
+        body = ('Thank you for the opportunity, I decided not to join.\n\n'
+                '> fatima.nisar@novulabs.net wrote:\n> NovuLabs')
+        self.assertEqual(process_message(mail('Re: Joining Confirmation', body, msg_id='<3@x>')), [])
+        self.assertEqual(Notification.objects.count(), 0)
+
+    def test_marketplace_alert_without_applied_lead_is_ignored(self):
+        msg = mail('You have a new message', 'Someone messaged you about another project',
+                   sender='Freelancer <noreply@notifications.freelancer.com>', msg_id='<4@x>')
+        self.assertEqual(process_message(msg), [])
+
+    def test_lead_not_applied_through_novuradar_gets_no_notification(self):
+        Opportunity.objects.create(requirement='Build a Shopify store for shoes', text='...', status='contacted')
+        msg = mail('Re: Build a Shopify store for shoes', 'Any update?', msg_id='<5@x>')
+        self.assertEqual(process_message(msg), [])
 
     def test_unconfigured_inbox_does_nothing(self):
         self.assertEqual(check_inbox()['configured'], False)

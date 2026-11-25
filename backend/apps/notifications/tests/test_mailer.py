@@ -9,7 +9,7 @@ from rest_framework.test import APIClient
 from apps.notifications.inbox import process_message
 from apps.notifications.mailer import ALERT_HEADER
 from apps.notifications.models import Notification
-from apps.opportunities.models import Opportunity
+from apps.opportunities.models import Activity, Opportunity
 
 User = get_user_model()
 
@@ -24,6 +24,8 @@ class TeamAlertEmailTests(TestCase):
             requirement='Build Flutter food delivery app', text='...', status='new',
             budget_text='$1,500–3,000 USD', source_url='https://www.freelancer.com/projects/flutter/food-app',
         )
+        Activity.objects.create(opportunity=self.lead, action='status_change', from_value='new',
+                                to_value='proposal', payload={'via': 'proposal_studio'})
 
     def test_marking_proposal_sent_sends_no_email(self):
         with self.captureOnCommitCallbacks(execute=True):
